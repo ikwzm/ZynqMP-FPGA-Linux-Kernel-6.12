@@ -57,6 +57,7 @@ run_patch 222_drivers-media-test-drivers.patch
 run_patch 224_drivers-media-v4l2.patch
 run_patch 225_drivers-mfd.patch
 run_patch 226_drivers-misc.patch
+run_patch 226_drivers-misc-fix.patch
 run_patch 227_drivers-mmc.patch
 run_patch 228_drivers-mtd.patch
 run_patch 230_drivers-net-ethernet.patch
