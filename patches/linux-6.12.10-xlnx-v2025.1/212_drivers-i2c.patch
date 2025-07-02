@@ -1,0 +1,1040 @@
+--- linux-6.12.10/drivers/i2c/busses/i2c-cadence.c	2025-07-02 11:58:44.209326800 +0900
++++ linux-xlnx-2025.1/drivers/i2c/busses/i2c-cadence.c	2025-07-02 12:01:27.992131800 +0900
+@@ -129,6 +129,7 @@
+ 
+ #define CDNS_I2C_BROKEN_HOLD_BIT	BIT(0)
+ #define CDNS_I2C_POLL_US	100000
++#define CDNS_I2C_POLL_US_ATOMIC	10
+ #define CDNS_I2C_TIMEOUT_US	500000
+ 
+ #define cdns_i2c_readreg(offset)       readl_relaxed(id->membase + offset)
+@@ -189,6 +190,8 @@
+  * @slave_state:	I2C Slave state(idle/read/write).
+  * @fifo_depth:		The depth of the transfer FIFO
+  * @transfer_size:	The maximum number of bytes in one transfer
++ * @atomic:		Mode of transfer
++ * @err_status_atomic:	Error status in atomic mode
+  */
+ struct cdns_i2c {
+ 	struct device		*dev;
+@@ -219,6 +222,8 @@
+ #endif
+ 	u32 fifo_depth;
+ 	unsigned int transfer_size;
++	bool atomic;
++	int err_status_atomic;
+ };
+ 
+ struct cdns_platform_data {
+@@ -229,6 +234,66 @@
+ 					     clk_rate_change_nb)
+ 
+ /**
++ * cdns_i2c_init -  Controller initialisation
++ * @id:		Device private data structure
++ *
++ * Initialise the i2c controller.
++ *
++ */
++static void cdns_i2c_init(struct cdns_i2c *id)
++{
++	cdns_i2c_writereg(id->ctrl_reg, CDNS_I2C_CR_OFFSET);
++	/*
++	 * Cadence I2C controller has a bug wherein it generates
++	 * invalid read transaction after HW timeout in master receiver mode.
++	 * HW timeout is not used by this driver and the interrupt is disabled.
++	 * But the feature itself cannot be disabled. Hence maximum value
++	 * is written to this register to reduce the chances of error.
++	 */
++	cdns_i2c_writereg(CDNS_I2C_TIMEOUT_MAX, CDNS_I2C_TIME_OUT_OFFSET);
++}
++
++/**
++ * cdns_i2c_runtime_suspend -  Runtime suspend method for the driver
++ * @dev:	Address of the platform_device structure
++ *
++ * Put the driver into low power mode.
++ *
++ * Return: 0 always
++ */
++static int cdns_i2c_runtime_suspend(struct device *dev)
++{
++	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
++
++	clk_disable(xi2c->clk);
++
++	return 0;
++}
++
++/**
++ * cdns_i2c_runtime_resume - Runtime resume
++ * @dev:	Address of the platform_device structure
++ *
++ * Runtime resume callback.
++ *
++ * Return: 0 on success and error value on error
++ */
++static int cdns_i2c_runtime_resume(struct device *dev)
++{
++	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
++	int ret;
++
++	ret = clk_enable(xi2c->clk);
++	if (ret) {
++		dev_err(dev, "Cannot enable clock.\n");
++		return ret;
++	}
++	cdns_i2c_init(xi2c);
++
++	return 0;
++}
++
++/**
+  * cdns_i2c_clear_bus_hold - Clear bus hold bit
+  * @id:	Pointer to driver data struct
+  *
+@@ -561,6 +626,89 @@
+ 	return cdns_i2c_master_isr(ptr);
+ }
+ 
++static bool cdns_i2c_error_check(struct cdns_i2c *id)
++{
++	unsigned int isr_status;
++
++	id->err_status = 0;
++
++	isr_status = cdns_i2c_readreg(CDNS_I2C_ISR_OFFSET);
++	cdns_i2c_writereg(isr_status & CDNS_I2C_IXR_ERR_INTR_MASK, CDNS_I2C_ISR_OFFSET);
++
++	id->err_status = isr_status & CDNS_I2C_IXR_ERR_INTR_MASK;
++
++	return !!id->err_status;
++}
++
++static void cdns_i2c_mrecv_atomic(struct cdns_i2c *id)
++{
++	while (id->recv_count > 0) {
++		bool updatetx;
++
++		/*
++		 * Check if transfer size register needs to be updated again for a
++		 * large data receive operation.
++		 */
++		updatetx = id->recv_count > id->curr_recv_count;
++
++		while (id->curr_recv_count > 0) {
++			if (cdns_i2c_readreg(CDNS_I2C_SR_OFFSET) & CDNS_I2C_SR_RXDV) {
++				*id->p_recv_buf = cdns_i2c_readreg(CDNS_I2C_DATA_OFFSET);
++				id->p_recv_buf++;
++				id->recv_count--;
++				id->curr_recv_count--;
++
++				/*
++				 * Clear the hold bit that was set for FIFO control,
++				 * if the remaining RX data is less than or equal to
++				 * the FIFO depth, unless a repeated start is selected.
++				 */
++				if (id->recv_count <= id->fifo_depth && !id->bus_hold_flag)
++					cdns_i2c_clear_bus_hold(id);
++			}
++			if (cdns_i2c_error_check(id))
++				return;
++			if (cdns_is_holdquirk(id, updatetx))
++				break;
++		}
++
++		/*
++		 * The controller sends NACK to the slave/target when transfer size
++		 * register reaches zero without considering the HOLD bit.
++		 * This workaround is implemented for large data transfers to
++		 * maintain transfer size non-zero while performing a large
++		 * receive operation.
++		 */
++		if (cdns_is_holdquirk(id, updatetx)) {
++			/* wait while fifo is full */
++			while (cdns_i2c_readreg(CDNS_I2C_XFER_SIZE_OFFSET) !=
++			       (id->curr_recv_count - id->fifo_depth))
++				;
++
++			/*
++			 * Check number of bytes to be received against maximum
++			 * transfer size and update register accordingly.
++			 */
++			if ((id->recv_count - id->fifo_depth) >
++			    id->transfer_size) {
++				cdns_i2c_writereg(id->transfer_size,
++						  CDNS_I2C_XFER_SIZE_OFFSET);
++				id->curr_recv_count = id->transfer_size +
++						      id->fifo_depth;
++			} else {
++				cdns_i2c_writereg(id->recv_count -
++						  id->fifo_depth,
++						  CDNS_I2C_XFER_SIZE_OFFSET);
++				id->curr_recv_count = id->recv_count;
++			}
++		}
++	}
++
++	/* Clear hold (if not repeated start) */
++	if (!id->recv_count && !id->bus_hold_flag)
++		cdns_i2c_clear_bus_hold(id);
++}
++
+ /**
+  * cdns_i2c_mrecv - Prepare and start a master receive operation
+  * @id:		pointer to the i2c device structure
+@@ -655,7 +803,34 @@
+ 		cdns_i2c_writereg(addr, CDNS_I2C_ADDR_OFFSET);
+ 	}
+ 
+-	cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	if (!id->atomic)
++		cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	else
++		cdns_i2c_mrecv_atomic(id);
++}
++
++static void cdns_i2c_msend_rem_atomic(struct cdns_i2c *id)
++{
++	while (id->send_count) {
++		unsigned int avail_bytes;
++		unsigned int bytes_to_send;
++
++		avail_bytes = id->fifo_depth - cdns_i2c_readreg(CDNS_I2C_XFER_SIZE_OFFSET);
++		if (id->send_count > avail_bytes)
++			bytes_to_send = avail_bytes;
++		else
++			bytes_to_send = id->send_count;
++
++		while (bytes_to_send--) {
++			cdns_i2c_writereg((*id->p_send_buf++), CDNS_I2C_DATA_OFFSET);
++			id->send_count--;
++		}
++		if (cdns_i2c_error_check(id))
++			return;
++	}
++
++	if (!id->send_count && !id->bus_hold_flag)
++		cdns_i2c_clear_bus_hold(id);
+ }
+ 
+ /**
+@@ -718,7 +893,10 @@
+ 	cdns_i2c_writereg(id->p_msg->addr & CDNS_I2C_ADDR_MASK,
+ 						CDNS_I2C_ADDR_OFFSET);
+ 
+-	cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	if (!id->atomic)
++		cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	else if (id->send_count > 0)
++		cdns_i2c_msend_rem_atomic(id);
+ }
+ 
+ /**
+@@ -758,7 +936,8 @@
+ 
+ 	id->p_msg = msg;
+ 	id->err_status = 0;
+-	reinit_completion(&id->xfer_done);
++	if (!id->atomic)
++		reinit_completion(&id->xfer_done);
+ 
+ 	/* Check for the TEN Bit mode on each msg */
+ 	reg = cdns_i2c_readreg(CDNS_I2C_CR_OFFSET);
+@@ -780,14 +959,31 @@
+ 
+ 	/* Minimal time to execute this message */
+ 	msg_timeout = msecs_to_jiffies((1000 * msg->len * BITS_PER_BYTE) / id->i2c_clk);
+-	/* Plus some wiggle room */
+-	msg_timeout += msecs_to_jiffies(500);
++
++	/*
++	 * Plus some wiggle room.
++	 * For non-atomic contexts, 500 ms is added to the timeout.
++	 * For atomic contexts, 2000 ms is added because transfers happen in polled
++	 * mode, requiring more time to account for the polling overhead.
++	 */
++	if (!id->atomic)
++		msg_timeout += msecs_to_jiffies(500);
++	else
++		msg_timeout += msecs_to_jiffies(2000);
+ 
+ 	if (msg_timeout < adap->timeout)
+ 		msg_timeout = adap->timeout;
+ 
+-	/* Wait for the signal of completion */
+-	time_left = wait_for_completion_timeout(&id->xfer_done, msg_timeout);
++	if (!id->atomic) {
++		/* Wait for the signal of completion */
++		time_left = wait_for_completion_timeout(&id->xfer_done, msg_timeout);
++	} else {
++		/* 0 is success, -ETIMEDOUT is error */
++		time_left = !readl_poll_timeout_atomic(id->membase + CDNS_I2C_ISR_OFFSET,
++						       reg, (reg & CDNS_I2C_IXR_COMP),
++						       CDNS_I2C_POLL_US_ATOMIC, msg_timeout);
++	}
++
+ 	if (time_left == 0) {
+ 		cdns_i2c_master_reset(adap);
+ 		return -ETIMEDOUT;
+@@ -806,58 +1002,31 @@
+ 	return 0;
+ }
+ 
+-/**
+- * cdns_i2c_master_xfer - The main i2c transfer function
+- * @adap:	pointer to the i2c adapter driver instance
+- * @msgs:	pointer to the i2c message structure
+- * @num:	the number of messages to transfer
+- *
+- * Initiates the send/recv activity based on the transfer message received.
+- *
+- * Return: number of msgs processed on success, negative error otherwise
+- */
+-static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+-				int num)
++static int cdns_i2c_master_common_xfer(struct i2c_adapter *adap,
++				       struct i2c_msg *msgs,
++				       int num)
+ {
+ 	int ret, count;
+ 	u32 reg;
+ 	struct cdns_i2c *id = adap->algo_data;
+ 	bool hold_quirk;
+-#if IS_ENABLED(CONFIG_I2C_SLAVE)
+-	bool change_role = false;
+-#endif
+-
+-	ret = pm_runtime_resume_and_get(id->dev);
+-	if (ret < 0)
+-		return ret;
+-
+-#if IS_ENABLED(CONFIG_I2C_SLAVE)
+-	/* Check i2c operating mode and switch if possible */
+-	if (id->dev_mode == CDNS_I2C_MODE_SLAVE) {
+-		if (id->slave_state != CDNS_I2C_SLAVE_STATE_IDLE) {
+-			ret = -EAGAIN;
+-			goto out;
+-		}
+-
+-		/* Set mode to master */
+-		cdns_i2c_set_mode(CDNS_I2C_MODE_MASTER, id);
+-
+-		/* Mark flag to change role once xfer is completed */
+-		change_role = true;
+-	}
+-#endif
+ 
+ 	/* Check if the bus is free */
+-
+-	ret = readl_relaxed_poll_timeout(id->membase + CDNS_I2C_SR_OFFSET,
+-					 reg,
+-					 !(reg & CDNS_I2C_SR_BA),
+-					 CDNS_I2C_POLL_US, CDNS_I2C_TIMEOUT_US);
++	if (!id->atomic)
++		ret = readl_relaxed_poll_timeout(id->membase + CDNS_I2C_SR_OFFSET,
++						 reg,
++						 !(reg & CDNS_I2C_SR_BA),
++						 CDNS_I2C_POLL_US, CDNS_I2C_TIMEOUT_US);
++	else
++		ret = readl_poll_timeout_atomic(id->membase + CDNS_I2C_SR_OFFSET,
++						reg,
++						!(reg & CDNS_I2C_SR_BA),
++						CDNS_I2C_POLL_US_ATOMIC, CDNS_I2C_TIMEOUT_US);
+ 	if (ret) {
+ 		ret = -EAGAIN;
+ 		if (id->adap.bus_recovery_info)
+ 			i2c_recover_bus(adap);
+-		goto out;
++		return ret;
+ 	}
+ 
+ 	hold_quirk = !!(id->quirks & CDNS_I2C_BROKEN_HOLD_BIT);
+@@ -877,8 +1046,7 @@
+ 			if (msgs[count].flags & I2C_M_RD) {
+ 				dev_warn(adap->dev.parent,
+ 					 "Can't do repeated start after a receive message\n");
+-				ret = -EOPNOTSUPP;
+-				goto out;
++				return -EOPNOTSUPP;
+ 			}
+ 		}
+ 		id->bus_hold_flag = 1;
+@@ -896,26 +1064,65 @@
+ 
+ 		ret = cdns_i2c_process_msg(id, msgs, adap);
+ 		if (ret)
+-			goto out;
++			return ret;
+ 
+ 		/* Report the other error interrupts to application */
+-		if (id->err_status) {
++		if (id->err_status || id->err_status_atomic) {
+ 			cdns_i2c_master_reset(adap);
+ 
+-			if (id->err_status & CDNS_I2C_IXR_NACK) {
+-				ret = -ENXIO;
+-				goto out;
+-			}
+-			ret = -EIO;
+-			goto out;
++			if (id->err_status & CDNS_I2C_IXR_NACK)
++				return -ENXIO;
++
++			return -EIO;
+ 		}
+ 	}
++	return 0;
++}
++
++/**
++ * cdns_i2c_master_xfer - The main i2c transfer function
++ * @adap:	pointer to the i2c adapter driver instance
++ * @msgs:	pointer to the i2c message structure
++ * @num:	the number of messages to transfer
++ *
++ * Initiates the send/recv activity based on the transfer message received.
++ *
++ * Return: number of msgs processed on success, negative error otherwise
++ */
++static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
++				int num)
++{
++	int ret;
++	struct cdns_i2c *id = adap->algo_data;
++#if IS_ENABLED(CONFIG_I2C_SLAVE)
++	bool change_role = false;
++#endif
+ 
+-	ret = num;
++	ret = pm_runtime_resume_and_get(id->dev);
++	if (ret < 0)
++		return ret;
+ 
+-out:
++#if IS_ENABLED(CONFIG_I2C_SLAVE)
++	/* Check i2c operating mode and switch if possible */
++	if (id->dev_mode == CDNS_I2C_MODE_SLAVE) {
++		if (id->slave_state != CDNS_I2C_SLAVE_STATE_IDLE) {
++			ret = -EAGAIN;
++			goto out;
++		}
++
++		/* Set mode to master */
++		cdns_i2c_set_mode(CDNS_I2C_MODE_MASTER, id);
++
++		/* Mark flag to change role once xfer is completed */
++		change_role = true;
++	}
++#endif
+ 
++	ret = cdns_i2c_master_common_xfer(adap, msgs, num);
++	if (!ret)
++		ret = num;
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
++out:
+ 	/* Switch i2c mode to slave */
+ 	if (change_role)
+ 		cdns_i2c_set_mode(CDNS_I2C_MODE_SLAVE, id);
+@@ -927,6 +1134,41 @@
+ }
+ 
+ /**
++ * cdns_i2c_master_xfer_atomic - The i2c transfer function in atomic mode
++ * @adap:	pointer to the i2c adapter driver instance
++ * @msgs:	pointer to the i2c message structure
++ * @num:	the number of messages to transfer
++ *
++ * Return: number of msgs processed on success, negative error otherwise
++ */
++static int cdns_i2c_master_xfer_atomic(struct i2c_adapter *adap, struct i2c_msg *msgs,
++				       int num)
++{
++	int ret;
++	struct cdns_i2c *id = adap->algo_data;
++
++	ret = cdns_i2c_runtime_resume(id->dev);
++	if (ret)
++		return ret;
++
++	if (id->quirks & CDNS_I2C_BROKEN_HOLD_BIT) {
++		dev_warn(id->adap.dev.parent,
++			 "Atomic xfer not supported for version 1.0\n");
++		return 0;
++	}
++
++	id->atomic = true;
++	ret = cdns_i2c_master_common_xfer(adap, msgs, num);
++	if (!ret)
++		ret = num;
++
++	id->atomic = false;
++	cdns_i2c_runtime_suspend(id->dev);
++
++	return ret;
++}
++
++/**
+  * cdns_i2c_func - Returns the supported features of the I2C driver
+  * @adap:	pointer to the i2c adapter structure
+  *
+@@ -990,6 +1232,7 @@
+ 
+ static const struct i2c_algorithm cdns_i2c_algo = {
+ 	.master_xfer	= cdns_i2c_master_xfer,
++	.master_xfer_atomic = cdns_i2c_master_xfer_atomic,
+ 	.functionality	= cdns_i2c_func,
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
+ 	.reg_slave	= cdns_reg_slave,
+@@ -1158,23 +1401,6 @@
+ 	}
+ }
+ 
+-/**
+- * cdns_i2c_runtime_suspend -  Runtime suspend method for the driver
+- * @dev:	Address of the platform_device structure
+- *
+- * Put the driver into low power mode.
+- *
+- * Return: 0 always
+- */
+-static int __maybe_unused cdns_i2c_runtime_suspend(struct device *dev)
+-{
+-	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+-
+-	clk_disable(xi2c->clk);
+-
+-	return 0;
+-}
+-
+ static int __maybe_unused cdns_i2c_suspend(struct device *dev)
+ {
+ 	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+@@ -1186,49 +1412,6 @@
+ 
+ 	return 0;
+ }
+-
+-/**
+- * cdns_i2c_init -  Controller initialisation
+- * @id:		Device private data structure
+- *
+- * Initialise the i2c controller.
+- *
+- */
+-static void cdns_i2c_init(struct cdns_i2c *id)
+-{
+-	cdns_i2c_writereg(id->ctrl_reg, CDNS_I2C_CR_OFFSET);
+-	/*
+-	 * Cadence I2C controller has a bug wherein it generates
+-	 * invalid read transaction after HW timeout in master receiver mode.
+-	 * HW timeout is not used by this driver and the interrupt is disabled.
+-	 * But the feature itself cannot be disabled. Hence maximum value
+-	 * is written to this register to reduce the chances of error.
+-	 */
+-	cdns_i2c_writereg(CDNS_I2C_TIMEOUT_MAX, CDNS_I2C_TIME_OUT_OFFSET);
+-}
+-
+-/**
+- * cdns_i2c_runtime_resume - Runtime resume
+- * @dev:	Address of the platform_device structure
+- *
+- * Runtime resume callback.
+- *
+- * Return: 0 on success and error value on error
+- */
+-static int __maybe_unused cdns_i2c_runtime_resume(struct device *dev)
+-{
+-	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+-	int ret;
+-
+-	ret = clk_enable(xi2c->clk);
+-	if (ret) {
+-		dev_err(dev, "Cannot enable clock.\n");
+-		return ret;
+-	}
+-	cdns_i2c_init(xi2c);
+-
+-	return 0;
+-}
+ 
+ static int __maybe_unused cdns_i2c_resume(struct device *dev)
+ {
+--- linux-6.12.10/drivers/i2c/busses/i2c-xiic.c	2025-07-02 11:58:44.257560200 +0900
++++ linux-xlnx-2025.1/drivers/i2c/busses/i2c-xiic.c	2025-07-02 12:01:28.038773700 +0900
+@@ -30,6 +30,8 @@
+ #include <linux/of.h>
+ #include <linux/clk.h>
+ #include <linux/pm_runtime.h>
++#include <linux/iopoll.h>
++#include <linux/spinlock.h>
+ 
+ #define DRIVER_NAME "xiic-i2c"
+ #define DYNAMIC_MODE_READ_BROKEN_BIT	BIT(0)
+@@ -74,6 +76,9 @@
+  * @smbus_block_read: Flag to handle block read
+  * @input_clk: Input clock to I2C controller
+  * @i2c_clk: I2C SCL frequency
++ * @atomic: Mode of transfer
++ * @atomic_lock: Lock for atomic transfer mode
++ * @atomic_xfer_state: See STATE_
+  */
+ struct xiic_i2c {
+ 	struct device *dev;
+@@ -96,6 +101,9 @@
+ 	bool smbus_block_read;
+ 	unsigned long input_clk;
+ 	unsigned int i2c_clk;
++	bool atomic;
++	spinlock_t atomic_lock;		/* Lock for atomic transfer mode */
++	enum xilinx_i2c_state atomic_xfer_state;
+ };
+ 
+ struct xiic_version_data {
+@@ -224,6 +232,8 @@
+ #define XIIC_I2C_TIMEOUT	(msecs_to_jiffies(1000))
+ /* timeout waiting for the controller finish transfers */
+ #define XIIC_XFER_TIMEOUT	(msecs_to_jiffies(10000))
++/* timeout waiting for the controller finish transfers in micro seconds */
++#define XIIC_XFER_TIMEOUT_US	10000000
+ 
+ /*
+  * The following constant is used for the device global interrupt enable
+@@ -238,6 +248,29 @@
+ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num);
+ static void __xiic_start_xfer(struct xiic_i2c *i2c);
+ 
++static int xiic_i2c_runtime_suspend(struct device *dev)
++{
++	struct xiic_i2c *i2c = dev_get_drvdata(dev);
++
++	clk_disable(i2c->clk);
++
++	return 0;
++}
++
++static int xiic_i2c_runtime_resume(struct device *dev)
++{
++	struct xiic_i2c *i2c = dev_get_drvdata(dev);
++	int ret;
++
++	ret = clk_enable(i2c->clk);
++	if (ret) {
++		dev_err(dev, "Cannot enable clock.\n");
++		return ret;
++	}
++
++	return 0;
++}
++
+ /*
+  * For the register read and write functions, a little-endian and big-endian
+  * version are necessary. Endianness is detected during the probe function.
+@@ -374,9 +407,10 @@
+ 	unsigned int index = 0;
+ 	u32 reg_val;
+ 
+-	dev_dbg(i2c->adap.dev.parent,
+-		"%s entry, i2c->input_clk: %ld, i2c->i2c_clk: %d\n",
+-		__func__, i2c->input_clk, i2c->i2c_clk);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent,
++			"%s entry, i2c->input_clk: %ld, i2c->i2c_clk: %d\n",
++			__func__, i2c->input_clk, i2c->i2c_clk);
+ 
+ 	/* If not specified in DT, do not configure in SW. Rely only on Vivado design */
+ 	if (!i2c->i2c_clk || !i2c->input_clk)
+@@ -467,7 +501,8 @@
+ 		return ret;
+ 
+ 	/* Enable interrupts */
+-	xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	if (!i2c->atomic)
++		xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
+ 
+ 	xiic_irq_clr_en(i2c, XIIC_INTR_ARB_LOST_MASK);
+ 
+@@ -549,11 +584,12 @@
+ 
+ 	bytes_in_fifo = xiic_getreg8(i2c, XIIC_RFO_REG_OFFSET) + 1;
+ 
+-	dev_dbg(i2c->adap.dev.parent,
+-		"%s entry, bytes in fifo: %d, rem: %d, SR: 0x%x, CR: 0x%x\n",
+-		__func__, bytes_in_fifo, xiic_rx_space(i2c),
+-		xiic_getreg8(i2c, XIIC_SR_REG_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent,
++			"%s entry, bytes in fifo: %d, rem: %d, SR: 0x%x, CR: 0x%x\n",
++			__func__, bytes_in_fifo, xiic_rx_space(i2c),
++			xiic_getreg8(i2c, XIIC_SR_REG_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 
+ 	if (bytes_in_fifo > xiic_rx_space(i2c))
+ 		bytes_in_fifo = xiic_rx_space(i2c);
+@@ -612,6 +648,26 @@
+ 	}
+ }
+ 
++static bool xiic_error_check(struct xiic_i2c *i2c)
++{
++	bool status = false;
++	u32 pend, isr, ier;
++
++	isr = xiic_getreg32(i2c, XIIC_IISR_OFFSET);
++	ier = xiic_getreg32(i2c, XIIC_IIER_OFFSET);
++	pend = isr & ier;
++
++	if ((pend & XIIC_INTR_ARB_LOST_MASK) ||
++	    ((pend & XIIC_INTR_TX_ERROR_MASK) &&
++	    !(pend & XIIC_INTR_RX_FULL_MASK))) {
++		xiic_reinit(i2c);
++		status = true;
++		if (i2c->tx_msg || i2c->rx_msg)
++			i2c->atomic_xfer_state = STATE_ERROR;
++	}
++	return status;
++}
++
+ static int xiic_tx_fifo_space(struct xiic_i2c *i2c)
+ {
+ 	/* return the actual space left in the FIFO */
+@@ -625,8 +681,9 @@
+ 
+ 	len = (len > fifo_space) ? fifo_space : len;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, len: %d, fifo space: %d\n",
+-		__func__, len, fifo_space);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, len: %d, fifo space: %d\n",
++			__func__, len, fifo_space);
+ 
+ 	while (len--) {
+ 		u16 data = i2c->tx_msg->buf[i2c->tx_pos++];
+@@ -649,9 +706,13 @@
+ 				xiic_setreg8(i2c, XIIC_CR_REG_OFFSET, cr &
+ 					     ~XIIC_CR_MSMS_MASK);
+ 			}
+-			dev_dbg(i2c->adap.dev.parent, "%s TX STOP\n", __func__);
++			if (!i2c->atomic)
++				dev_dbg(i2c->adap.dev.parent, "%s TX STOP\n", __func__);
+ 		}
+ 		xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
++
++		if (i2c->atomic && xiic_error_check(i2c))
++			return;
+ 	}
+ }
+ 
+@@ -854,22 +915,51 @@
+ 	 */
+ 	err = xiic_bus_busy(i2c);
+ 	while (err && tries--) {
+-		msleep(1);
++		if (i2c->atomic)
++			udelay(1000);
++		else
++			usleep_range(1000, 1100);
+ 		err = xiic_bus_busy(i2c);
+ 	}
+ 
+ 	return err;
+ }
+ 
++static void xiic_recv_atomic(struct xiic_i2c *i2c)
++{
++	while (xiic_rx_space(i2c)) {
++		if (xiic_getreg32(i2c, XIIC_IISR_OFFSET) & XIIC_INTR_RX_FULL_MASK) {
++			xiic_read_rx(i2c);
++
++			/* Clear Rx full and Tx error interrupts. */
++			xiic_irq_clr_en(i2c, XIIC_INTR_RX_FULL_MASK |
++					XIIC_INTR_TX_ERROR_MASK);
++		}
++		if (xiic_error_check(i2c))
++			return;
++	}
++
++	i2c->rx_msg = NULL;
++	xiic_irq_clr_en(i2c, XIIC_INTR_TX_ERROR_MASK);
++
++	/* send next message if this wasn't the last. */
++	if (i2c->nmsgs > 1) {
++		i2c->nmsgs--;
++		i2c->tx_msg++;
++		__xiic_start_xfer(i2c);
++	}
++}
++
+ static void xiic_start_recv(struct xiic_i2c *i2c)
+ {
+ 	u16 rx_watermark;
+ 	u8 cr = 0, rfd_set = 0;
+ 	struct i2c_msg *msg = i2c->rx_msg = i2c->tx_msg;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
+-		__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
++			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 
+ 	/* Disable Tx interrupts */
+ 	xiic_irq_dis(i2c, XIIC_INTR_TX_HALF_MASK | XIIC_INTR_TX_EMPTY_MASK);
+@@ -967,9 +1057,10 @@
+ 					XIIC_CR_MSMS_MASK)
+ 					& ~(XIIC_CR_DIR_IS_TX_MASK));
+ 		}
+-		dev_dbg(i2c->adap.dev.parent, "%s end, ISR: 0x%x, CR: 0x%x\n",
+-			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++		if (!i2c->atomic)
++			dev_dbg(i2c->adap.dev.parent, "%s end, ISR: 0x%x, CR: 0x%x\n",
++				__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++				xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 	}
+ 
+ 	if (i2c->nmsgs == 1)
+@@ -979,10 +1070,55 @@
+ 	/* the message is tx:ed */
+ 	i2c->tx_pos = msg->len;
+ 
++	i2c->prev_msg_tx = false;
++
+ 	/* Enable interrupts */
+-	xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	if (!i2c->atomic)
++		xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	else
++		xiic_recv_atomic(i2c);
++}
+ 
+-	i2c->prev_msg_tx = false;
++static void xiic_send_rem_atomic(struct xiic_i2c *i2c)
++{
++	while (xiic_tx_space(i2c)) {
++		if (xiic_tx_fifo_space(i2c)) {
++			u16 data;
++
++			data = i2c->tx_msg->buf[i2c->tx_pos];
++			i2c->tx_pos++;
++			if (!xiic_tx_space(i2c) && i2c->nmsgs == 1) {
++				/* last message in transfer -> STOP */
++				if (i2c->dynamic) {
++					data |= XIIC_TX_DYN_STOP_MASK;
++				} else {
++					u8 cr;
++					int status;
++
++					/* Wait till FIFO is empty so STOP is sent last */
++					status = xiic_wait_tx_empty(i2c);
++					if (status)
++						return;
++
++					/* Write to CR to stop */
++					cr = xiic_getreg8(i2c, XIIC_CR_REG_OFFSET);
++					xiic_setreg8(i2c, XIIC_CR_REG_OFFSET, cr &
++						     ~XIIC_CR_MSMS_MASK);
++				}
++			}
++			xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
++		}
++		if (xiic_error_check(i2c))
++			return;
++	}
++
++	if (i2c->nmsgs > 1) {
++		i2c->nmsgs--;
++		i2c->tx_msg++;
++		__xiic_start_xfer(i2c);
++	} else {
++		xiic_irq_dis(i2c, XIIC_INTR_TX_HALF_MASK);
++	}
+ }
+ 
+ static void xiic_start_send(struct xiic_i2c *i2c)
+@@ -991,11 +1127,13 @@
+ 	u16 data;
+ 	struct i2c_msg *msg = i2c->tx_msg;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, len: %d",
+-		__func__, msg, msg->len);
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
+-		__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic) {
++		dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, len: %d",
++			__func__, msg, msg->len);
++		dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
++			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	}
+ 
+ 	if (i2c->dynamic) {
+ 		/* write the address */
+@@ -1060,19 +1198,27 @@
+ 				XIIC_INTR_TX_ERROR_MASK |
+ 				XIIC_INTR_BNB_MASK);
+ 	}
++
+ 	i2c->prev_msg_tx = true;
++
++	if (i2c->atomic && !i2c->atomic_xfer_state)
++		xiic_send_rem_atomic(i2c);
+ }
+ 
+ static void __xiic_start_xfer(struct xiic_i2c *i2c)
+ {
+ 	int fifo_space = xiic_tx_fifo_space(i2c);
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, fifos space: %d\n",
+-		__func__, i2c->tx_msg, fifo_space);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, fifos space: %d\n",
++			__func__, i2c->tx_msg, fifo_space);
+ 
+ 	if (!i2c->tx_msg)
+ 		return;
+ 
++	if (i2c->atomic && xiic_error_check(i2c))
++		return;
++
+ 	i2c->rx_pos = 0;
+ 	i2c->tx_pos = 0;
+ 	i2c->state = STATE_START;
+@@ -1089,7 +1235,10 @@
+ 	bool broken_read, max_read_len, smbus_blk_read;
+ 	int ret, count;
+ 
+-	mutex_lock(&i2c->lock);
++	if (i2c->atomic)
++		spin_lock(&i2c->atomic_lock);
++	else
++		mutex_lock(&i2c->lock);
+ 
+ 	if (i2c->tx_msg || i2c->rx_msg) {
+ 		dev_err(i2c->adap.dev.parent,
+@@ -1098,6 +1247,8 @@
+ 		goto out;
+ 	}
+ 
++	i2c->atomic_xfer_state = STATE_DONE;
++
+ 	/* In single master mode bus can only be busy, when in use by this
+ 	 * driver. If the register indicates bus being busy for some reason we
+ 	 * should ignore it, since bus will never be released and i2c will be
+@@ -1124,7 +1275,9 @@
+ 	i2c->tx_msg = msgs;
+ 	i2c->rx_msg = NULL;
+ 	i2c->nmsgs = num;
+-	init_completion(&i2c->completion);
++
++	if (!i2c->atomic)
++		init_completion(&i2c->completion);
+ 
+ 	/* Decide standard mode or Dynamic mode */
+ 	i2c->dynamic = true;
+@@ -1159,7 +1312,10 @@
+ 		__xiic_start_xfer(i2c);
+ 
+ out:
+-	mutex_unlock(&i2c->lock);
++	if (i2c->atomic)
++		spin_unlock(&i2c->atomic_lock);
++	else
++		mutex_unlock(&i2c->lock);
+ 
+ 	return ret;
+ }
+@@ -1198,6 +1354,44 @@
+ 	return err;
+ }
+ 
++static int xiic_xfer_atomic(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
++{
++	struct xiic_i2c *i2c = i2c_get_adapdata(adap);
++	u32 status_reg;
++	int err;
++
++	err = xiic_i2c_runtime_resume(i2c->dev);
++	if (err)
++		return err;
++
++	i2c->atomic = true;
++	err = xiic_start_xfer(i2c, msgs, num);
++	if (err < 0)
++		return err;
++
++	err = readl_poll_timeout_atomic(i2c->base + XIIC_SR_REG_OFFSET,
++					status_reg, !(status_reg & XIIC_SR_BUS_BUSY_MASK),
++					1, XIIC_XFER_TIMEOUT_US);
++
++	if (err) /* Timeout */
++		err = -ETIMEDOUT;
++
++	spin_lock(&i2c->atomic_lock);
++	if (err || i2c->state) {
++		i2c->tx_msg = NULL;
++		i2c->rx_msg = NULL;
++		i2c->nmsgs = 0;
++	}
++
++	err = (i2c->atomic_xfer_state == STATE_DONE) ? num : -EIO;
++	spin_unlock(&i2c->atomic_lock);
++
++	i2c->atomic = false;
++	xiic_i2c_runtime_suspend(i2c->dev);
++
++	return err;
++}
++
+ static u32 xiic_func(struct i2c_adapter *adap)
+ {
+ 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_SMBUS_BLOCK_DATA;
+@@ -1205,6 +1399,7 @@
+ 
+ static const struct i2c_algorithm xiic_algorithm = {
+ 	.master_xfer = xiic_xfer,
++	.master_xfer_atomic = xiic_xfer_atomic,
+ 	.functionality = xiic_func,
+ };
+ 
+@@ -1268,6 +1463,7 @@
+ 		 DRIVER_NAME " %s", pdev->name);
+ 
+ 	mutex_init(&i2c->lock);
++	spin_lock_init(&i2c->atomic_lock);
+ 
+ 	i2c->clk = devm_clk_get_enabled(&pdev->dev, NULL);
+ 	if (IS_ERR(i2c->clk))
+@@ -1365,29 +1561,6 @@
+ 	pm_runtime_dont_use_autosuspend(&pdev->dev);
+ }
+ 
+-static int __maybe_unused xiic_i2c_runtime_suspend(struct device *dev)
+-{
+-	struct xiic_i2c *i2c = dev_get_drvdata(dev);
+-
+-	clk_disable(i2c->clk);
+-
+-	return 0;
+-}
+-
+-static int __maybe_unused xiic_i2c_runtime_resume(struct device *dev)
+-{
+-	struct xiic_i2c *i2c = dev_get_drvdata(dev);
+-	int ret;
+-
+-	ret = clk_enable(i2c->clk);
+-	if (ret) {
+-		dev_err(dev, "Cannot enable clock.\n");
+-		return ret;
+-	}
+-
+-	return 0;
+-}
+-
+ static const struct dev_pm_ops xiic_dev_pm_ops = {
+ 	SET_RUNTIME_PM_OPS(xiic_i2c_runtime_suspend,
+ 			   xiic_i2c_runtime_resume, NULL)
