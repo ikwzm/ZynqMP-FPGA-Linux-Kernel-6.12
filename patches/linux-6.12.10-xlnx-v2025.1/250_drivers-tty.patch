@@ -1,0 +1,22 @@
+--- linux-6.12.10/Documentation/devicetree/bindings/serial/pl011.yaml	2025-07-02 11:58:28.048114600 +0900
++++ linux-xlnx-2025.1/Documentation/devicetree/bindings/serial/pl011.yaml	2025-07-02 12:01:12.947528900 +0900
+@@ -92,6 +92,9 @@
+       3000ms.
+     default: 3000
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+--- linux-6.12.10/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml	2025-07-02 11:58:28.057180100 +0900
++++ linux-xlnx-2025.1/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml	2025-07-02 12:01:12.956616800 +0900
+@@ -15,6 +15,7 @@
+       enum:
+         - xlnx,xps-uartlite-1.00.a
+         - xlnx,opb-uartlite-1.00.b
++        - xlnx,axi-uartlite-rs485
+ 
+   reg:
+     maxItems: 1
