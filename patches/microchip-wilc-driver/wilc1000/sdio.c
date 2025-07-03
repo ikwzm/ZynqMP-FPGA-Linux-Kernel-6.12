@@ -241,6 +241,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
 	np = of_parse_phandle(func->card->host->parent->of_node, "mmc-pwrseq",
 			      0);
 	if ((np && of_device_is_available(np)) || sdio_priv->is_mmc_spi) {
+		wilc_disable_power_pins(wilc);
 		init_power = 1;
 		of_node_put(np);
 	} else {

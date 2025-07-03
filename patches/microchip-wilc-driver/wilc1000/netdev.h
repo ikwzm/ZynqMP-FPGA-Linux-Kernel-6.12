@@ -242,6 +242,7 @@ struct wilc_vif {
 struct wilc_power_gpios {
 	int reset;
 	int chip_en;
+	bool enabled;
 };
 
 struct wilc_power {
