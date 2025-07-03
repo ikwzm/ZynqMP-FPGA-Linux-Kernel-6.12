@@ -1,0 +1,90 @@
+diff --git a/hif.h b/hif.h
+index 28725ba..e02c28d 100644
+--- a/hif.h
++++ b/hif.h
+@@ -235,6 +235,8 @@ wilc_parse_join_bss_param(struct cfg80211_bss *bss,
+ int wilc_set_default_mgmt_key_index(struct wilc_vif *vif, u8 index);
+ 
+ void wilc_handle_disconnect(struct wilc_vif *vif);
++void wilc_enable_power_pins(struct wilc *wilc);
++void wilc_disable_power_pins(struct wilc *wilc);
+ int wilc_of_parse_power_pins(struct wilc *wilc);
+ void wilc_wlan_power(struct wilc *wilc, bool on);
+ int wilc_init_coex_config(struct wilc_vif *vif);
+diff --git a/netdev.h b/netdev.h
+index 72e4b79..8c3c18e 100644
+--- a/netdev.h
++++ b/netdev.h
+@@ -242,6 +242,7 @@ struct wilc_vif {
+ struct wilc_power_gpios {
+ 	int reset;
+ 	int chip_en;
++	bool enabled;
+ };
+ 
+ struct wilc_power {
+diff --git a/power.c b/power.c
+index aaa99b1..30e2196 100644
+--- a/power.c
++++ b/power.c
+@@ -12,6 +12,16 @@
+ 
+ #include "netdev.h"
+ 
++void wilc_disable_power_pins(struct wilc *wilc)
++{
++	struct wilc_power *power = &wilc->power;
++	power->gpios.enabled = false;
++}
++void wilc_enable_power_pins(struct wilc *wilc)
++{
++	struct wilc_power *power = &wilc->power;
++	power->gpios.enabled = true;
++}
+ /**
+  * wilc_of_parse_power_pins() - parse power sequence pins; to keep backward
+  *		compatibility with old device trees that doesn't provide
+@@ -31,6 +41,8 @@ int wilc_of_parse_power_pins(struct wilc *wilc)
+ 	const struct wilc_power_gpios *gpios = &default_gpios[0];
+ 	int ret;
+ 
++	wilc_disable_power_pins(wilc);
++
+ 	power->gpios.reset = of_get_named_gpio(of, "reset-gpios", 0);
+ 	if (!gpio_is_valid(power->gpios.reset))
+ 		power->gpios.reset = gpios->reset;
+@@ -48,7 +60,11 @@ int wilc_of_parse_power_pins(struct wilc *wilc)
+ 		return ret;
+ 
+ 	ret = devm_gpio_request(wilc->dev, power->gpios.reset, "RESET");
+-	return ret;
++	if (ret) 
++		return ret;
++
++	wilc_enable_power_pins(wilc);
++	return 0;
+ }
+ 
+ /**
+@@ -61,7 +77,8 @@ int wilc_of_parse_power_pins(struct wilc *wilc)
+  */
+ void wilc_wlan_power(struct wilc *wilc, bool on)
+ {
+-	if (!gpio_is_valid(wilc->power.gpios.chip_en) ||
++        if ((wilc->power.gpios.enabled == false) ||
++            !gpio_is_valid(wilc->power.gpios.chip_en) ||
+ 	    !gpio_is_valid(wilc->power.gpios.reset)) {
+ 		/* In case SDIO power sequence driver is used to power this
+ 		 * device then the powering sequence is handled by the bus
+diff --git a/sdio.c b/sdio.c
+index 3caf996..dacd8cb 100644
+--- a/sdio.c
++++ b/sdio.c
+@@ -241,6 +241,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
+ 	np = of_parse_phandle(func->card->host->parent->of_node, "mmc-pwrseq",
+ 			      0);
+ 	if ((np && of_device_is_available(np)) || sdio_priv->is_mmc_spi) {
++		wilc_disable_power_pins(wilc);
+ 		init_power = 1;
+ 		of_node_put(np);
+ 	} else {

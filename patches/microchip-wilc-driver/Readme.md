@@ -11,7 +11,7 @@ This directory provides the Linux Kernel Driver for the WiFi module in the Ultra
  
 ### Linux Kernel Driver
 
-#### linux-6.12-mchp
+#### Get linux-6.12-mchp
 
  * https://github.com/linux4microchip/linux
 
@@ -23,6 +23,15 @@ The branch for linux kernel is ```linux-6.12-mchp```.
 shell$ git clone --depth 1 --branch linux-6.12-mchp https://github.com/linux4microchip/linux linux-6.12-mchp
 shell$ cp -r linux-6.12-mchp/drivers/net/wireless/microchip/* .
 ```
+
+#### Patch
+
+```console
+shell$ cd wilc1000/
+shell$ patch -p1 < ../wilc1000-power-pins.patch
+shell$ cd
+```
+
 ### Thanks
 
 Thanks to Tosainu and microchip.
