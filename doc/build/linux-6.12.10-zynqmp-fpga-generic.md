@@ -1,0 +1,128 @@
+# Build Linux Kernel
+
+There are two ways
+
+1. run scripts/build-linux-6.12.10-zynqmp-fpga-generic.sh (easy)
+2. run this chapter step-by-step (annoying)
+
+## Download Linux Kernel Source
+
+### Clone from linux-stable.git
+
+```console
+shell$ git clone --depth 1 -b v6.12.10 git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux-6.12.10-zynqmp-fpga-generic
+```
+
+### Make Branch linux-6.12.10-zynqmp-fpga-generic
+
+```console
+shell$ cd linux-6.12.10-zynqmp-fpga-generic
+shell$ git checkout -b linux-6.12.10-zynqmp-fpga-generic refs/tags/v6.12.10
+```
+
+## Patch to Linux Kernel
+
+### Patch for linux-xlnx-v2025.1
+
+```console
+shell$ sh ../patches/linux-6.12.10-xlnx-v2025.1/zynqmp_fpga_patch.sh 
+```
+
+### Patch for scripts/package/mkdebian
+
+```console
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-builddeb-1.diff
+shell$ git add --all
+shell$ git commit -m "[patch] scripts/package/mkdebian"
+```
+
+### Add ATWILC3000 Linux Driver for Ultra96-V2
+
+```console
+shell$ rm -rf drivers/net/wireless/microchip/wilc
+shell$ cp -r ../patches/microchip-wilc-driver/wilc1000 drivers/net/wireless/microchip/wilc
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-wilc.diff 
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-pwrseq-wilc.diff
+shell$ git add --all
+shell$ git commit -m "[add] drivers/net/wireless/microchip/wilc"
+```
+
+### Patch for Ultra96
+
+```console
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-ultra96.diff
+shell$ git add --all
+shell$ git commit -m "[patch] for Ultra96."
+```
+
+### Patch for Ultra96-V2
+
+```console
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-ultra96v2.diff 
+shell$ git add --all
+shell$ git commit -m "[patch] for Ultra96-V2."
+```
+
+### Patch for Kria KV260
+
+```console
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-kv260.diff 
+shell$ git add --all
+shell$ git commit -m "[patch] for Kria KV260."
+```
+
+### Patch for Kria KR260
+
+```console
+shell$ patch -p1 < ../patches/linux-6.12.10-zynqmp-fpga-kr260.diff 
+shell$ git add --all
+shell$ git commit -m "[patch] for Kria KR260."
+```
+
+### Add zynqmp_fpga_generic_defconfig
+
+```console
+shell$ cp ../files/zynqmp_fpga_generic_defconfig arch/arm64/configs/
+shell$ git add arch/arm64/configs/zynqmp_fpga_generic_defconfig
+shell$ git commit -m "[add] zynqmp_fpga_generic_defconfig to arch/arm64/configs"
+```
+
+### Create tag and .version
+
+```console
+shell$ git tag -a v6.12.10-zynqmp-fpga -m "release v6.12.10-zynqmp-fpga-generic-4"
+shell$ echo 3 > .version
+```
+
+## Build
+
+### Setup for Build 
+
+```console
+shell$ cd linux-6.12.10-zynqmp-fpga-generic
+shell$ export ARCH=arm64
+shell$ export CROSS_COMPILE=aarch64-linux-gnu-
+shell$ make zynqmp_fpga_generic_defconfig
+```
+
+### Build Linux Kernel and device tree
+
+```console
+shell$ export DTC_FLAGS=--symbols
+shell$ rm -rf debian
+shell$ make deb-pkg
+```
+
+### Install kernel image to this repository
+
+```console
+shell$ cp arch/arm64/boot/Image.gz ../vmlinuz-6.12.10-zynqmp-fpga-generic-4
+shell$ cp .config             ../files/config-6.12.10-zynqmp-fpga-generic-4
+```
+
+### Install devicetree to this repository
+
+```console
+shell$ install -d ../devicetrees/6.12.10-zynqmp-fpga-generic-4
+shell$ cp arch/arm64/boot/dts/xilinx/* ../devicetrees/6.12.10-zynqmp-fpga-generic-4
+```
