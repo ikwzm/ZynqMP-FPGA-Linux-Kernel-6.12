@@ -1,0 +1,18 @@
+diff --git a/drivers/net/wireless/microchip/Kconfig b/drivers/net/wireless/microchip/Kconfig
+index a6b46fb6b..ca5d4cc8b 100644
+--- a/drivers/net/wireless/microchip/Kconfig
++++ b/drivers/net/wireless/microchip/Kconfig
+@@ -12,4 +12,5 @@ config WLAN_VENDOR_MICROCHIP
+ 
+ if WLAN_VENDOR_MICROCHIP
+ source "drivers/net/wireless/microchip/wilc1000/Kconfig"
++source "drivers/net/wireless/microchip/wilc/Kconfig"
+ endif # WLAN_VENDOR_MICROCHIP
+diff --git a/drivers/net/wireless/microchip/Makefile b/drivers/net/wireless/microchip/Makefile
+index 73b763c73..8fdb47e2b 100644
+--- a/drivers/net/wireless/microchip/Makefile
++++ b/drivers/net/wireless/microchip/Makefile
+@@ -1,2 +1,3 @@
+ # SPDX-License-Identifier: GPL-2.0
+ obj-$(CONFIG_WILC1000)		+= wilc1000/
++obj-$(CONFIG_WILC)		+= wilc/
