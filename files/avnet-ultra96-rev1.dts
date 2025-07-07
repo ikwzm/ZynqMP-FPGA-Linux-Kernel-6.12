@@ -24,3 +24,6 @@
 		ranges ;
 	};
 };
+&sdhci1 {
+	/delete-property/ no-sdio;
+};
