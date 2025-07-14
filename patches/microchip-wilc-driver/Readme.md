@@ -26,9 +26,19 @@ shell$ cp -r linux-6.12-mchp/drivers/net/wireless/microchip/* .
 
 #### Patch
 
+##### Fix wilc1000 to not control power when pins are not initialized
+
 ```console
 shell$ cd wilc1000/
-shell$ patch -p1 < ../wilc1000-power-pins.patch
+shell$ patch -p1 < ../wilc1000-1-power-pins.patch
+shell$ cd
+```
+
+##### Fix wilc1000 so that wilc_sdio_init() does not fail if pm_runtime is disabled in host controller
+
+```console
+shell$ cd wilc1000/
+shell$ patch -p1 < ../wilc1000-2-pm-runtime.patch
 shell$ cd
 ```
 

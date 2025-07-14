@@ -1,0 +1,48 @@
+diff --git a/sdio.c b/sdio.c
+index dacd8cb..77a324e 100644
+--- a/sdio.c
++++ b/sdio.c
+@@ -41,6 +41,7 @@ struct wilc_sdio {
+ 	struct wilc *wl;
+ 	u8 *cmd53_buf;
+ 	bool is_mmc_spi;
++	bool is_pm_enabled;
+ };
+ 
+ struct sdio_cmd52 {
+@@ -895,7 +896,9 @@ static int wilc_sdio_deinit(struct wilc *wilc)
+ 
+ 	sdio_priv->isinit = false;
+ 
+-	pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
++	if (sdio_priv->is_pm_enabled) {
++		pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
++	}
+ 	wilc_wlan_power(wilc, false);
+ 
+ 	return 0;
+@@ -917,6 +920,15 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
+ 		 func->card->host->ios.clock, test_mode ? "loopback mode" : "");
+ 
+ 	if (!sdio_priv->is_mmc_spi) {
++		sdio_priv->is_pm_enabled = pm_runtime_enabled(mmc_dev(func->card->host));
++                if (sdio_priv->is_pm_enabled == false) {
++			dev_info(&func->dev, "host is not enabled for pm_runtime\n");
++		}
++	} else {
++		sdio_priv->is_pm_enabled = false;
++	}
++
++	if (sdio_priv->is_pm_enabled) {
+ 		/* Patch for sdio interrupt latency issue */
+ 		ret = pm_runtime_get_sync(mmc_dev(func->card->host));
+ 		if (ret < 0) {
+@@ -1075,7 +1087,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
+ 	return 0;
+ 
+ pm_runtime_put:
+-	if (!sdio_priv->is_mmc_spi)
++	if (sdio_priv->is_pm_enabled)
+ 		pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
+ 	return ret;
+ }
