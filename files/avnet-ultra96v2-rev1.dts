@@ -534,6 +534,9 @@
 		status        = "okay";
 		reg           = <0>;
 		bus-width     = <4>;
+		interrupt-parent = <&gpio>;
+		interrupts = <76 IRQ_TYPE_EDGE_RISING>; /* MIO76 WLAN_IRQ 1V8 */
+		out-of-band-interrupt = <1>;
 	};
 };
 
