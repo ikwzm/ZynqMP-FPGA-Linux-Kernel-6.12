@@ -42,6 +42,14 @@ shell$ patch -p1 < ../wilc1000-2-pm-runtime.patch
 shell$ cd
 ```
 
+##### Add "out-of-band-interrupt" property to devcie tree
+
+```console
+shell$ cd wilc1000/
+shell$ patch -p1 < ../wilc1000-3-oob-intr.patch
+shell$ cd
+```
+
 ### Thanks
 
 Thanks to Tosainu and microchip.

@@ -1,0 +1,35 @@
+diff --git a/sdio.c b/sdio.c
+index 77a324e..dcde783 100644
+--- a/sdio.c
++++ b/sdio.c
+@@ -170,6 +170,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
+ 	struct device_node *np;
+ 	int irq_num;
+ 	struct wilc_vif *vif;
++	u32 oob_intr = 0;
+ 
+ 	sdio_priv = kzalloc(sizeof(*sdio_priv), GFP_KERNEL);
+ 	if (!sdio_priv)
+@@ -183,8 +184,12 @@ static int wilc_sdio_probe(struct sdio_func *func,
+ 
+ 	sdio_priv->is_mmc_spi = func->card->host->caps & MMC_CAP_SPI;
+ 
+-	if (IS_ENABLED(CONFIG_WILC_HW_OOB_INTR) || func->card->host->caps &
+-	    MMC_CAP_SPI)
++	if (of_property_read_u32(func->card->dev.of_node, "out-of-band-interrupt", &oob_intr) != 0) {
++		if (IS_ENABLED(CONFIG_WILC_HW_OOB_INTR))
++			oob_intr = 1;
++	}
++
++	if ((oob_intr != 0) || (func->card->host->caps & MMC_CAP_SPI))
+ 		io_type = WILC_HIF_SDIO_GPIO_IRQ;
+ 	else
+ 		io_type = WILC_HIF_SDIO;
+@@ -285,6 +290,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
+ 
+ 	wilc_bt_init(wilc);
+ 
++	dev_info(&func->dev, "out-of-band-interrupt %d\n", oob_intr);
+ 	dev_info(&func->dev, "Driver Initializing success\n");
+ 	return 0;
+ 
