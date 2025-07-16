@@ -19,6 +19,8 @@ The branch for linux kernel is ```linux-6.12-mchp```.
 
 ```Kconfig```, ```Makefile```, and ```wilc1000/``` in this directory were obtained as follows
 
+#### Copy to wilc1000 from linux-6.12-mchp/drivers/net/wireless/microchip/
+
 ```console
 shell$ git clone --depth 1 --branch linux-6.12-mchp https://github.com/linux4microchip/linux linux-6.12-mchp
 shell$ cp -r linux-6.12-mchp/drivers/net/wireless/microchip/* .
