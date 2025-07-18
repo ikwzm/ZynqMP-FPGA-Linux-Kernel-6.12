@@ -1,0 +1,105 @@
+diff --git a/include/linux/xlnx-ai-engine.h b/include/linux/xlnx-ai-engine.h
+index 44a1e40ef..77a9e6e47 100644
+--- a/include/linux/xlnx-ai-engine.h
++++ b/include/linux/xlnx-ai-engine.h
+@@ -161,6 +161,12 @@ int aie_partition_write(struct device *dev, struct aie_location loc,
+ int aie_partition_uc_wakeup(struct device *dev, struct aie_location *loc);
+ int aie_partition_initialize(struct device *dev, struct aie_partition_init_args *args);
+ int aie_partition_teardown(struct device *dev);
++int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
++int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
++bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc);
++int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc);
++int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval);
++int aie_load_cert(struct device *dev, unsigned char *elf_addr);
+ /**
+  * aie_get_error_category() - Get the category of an AIE error
+  * @err: AI engine hardware error
+@@ -271,5 +277,35 @@ static inline int aie_part_rscmgr_set_static_range(struct device *dev,
+ 	return -EINVAL;
+ }
+ 
++int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
++{
++	return -EINVAL;
++}
++
++int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
++{
++	return -EINVAL;
++}
++
++bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc)
++{
++	return false;
++}
++
++int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc)
++{
++	return 0;
++}
++
++int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval)
++{
++	return -EINVAL;
++}
++
++int aie_load_cert(struct device *dev, unsigned char *elf_addr)
++{
++	return -EINVAL;
++}
++
+ #endif /* CONFIG_XILINX_AIE */
+ #endif
+diff --git a/include/uapi/linux/xlnx-ai-engine.h b/include/uapi/linux/xlnx-ai-engine.h
+index 424c5f4c4..04abb24dc 100644
+--- a/include/uapi/linux/xlnx-ai-engine.h
++++ b/include/uapi/linux/xlnx-ai-engine.h
+@@ -781,47 +781,4 @@ struct aie_rsc_user_stat_array {
+  */
+ #define AIE_UPDATE_SHIMDMA_DMABUF_BD_ADDR_IOCTL	_IOW(AIE_IOCTL_BASE, 0x1e, \
+ 						struct aie_dmabuf_bd_args)
+-#if IS_ENABLED(CONFIG_XILINX_AIE)
+-
+-int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
+-int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
+-bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc);
+-int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc);
+-int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval);
+-int aie_load_cert(struct device *dev, unsigned char *elf_addr);
+-
+-#else /* IS_ENABLED(CONFIG_XILINX_AIE) */
+-
+-int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
+-{
+-	return -EINVAL;
+-}
+-
+-int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
+-{
+-	return -EINVAL;
+-}
+-
+-bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc)
+-{
+-	return false;
+-}
+-
+-int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc)
+-{
+-	return 0;
+-}
+-
+-int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval)
+-{
+-	return -EINVAL;
+-}
+-
+-int aie_load_cert(struct device *dev, unsigned char *elf_addr)
+-{
+-	return -EINVAL;
+-}
+-
+-#endif /* IS_ENABLED(CONFIG_XILINX_AIE) */
+-
+ #endif

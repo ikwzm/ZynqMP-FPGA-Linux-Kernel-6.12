@@ -1,0 +1,14 @@
+diff --git a/Documentation/devicetree/bindings/i3c/snps,dw-i3c-master.yaml b/Documentation/devicetree/bindings/i3c/snps,dw-i3c-master.yaml
+index 4fc13e3c0..5f6467375 100644
+--- a/Documentation/devicetree/bindings/i3c/snps,dw-i3c-master.yaml
++++ b/Documentation/devicetree/bindings/i3c/snps,dw-i3c-master.yaml
+@@ -34,6 +34,9 @@ properties:
+   interrupts:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+ required:
+   - compatible
+   - reg
