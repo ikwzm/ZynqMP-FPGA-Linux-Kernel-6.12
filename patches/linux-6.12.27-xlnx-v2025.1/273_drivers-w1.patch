@@ -1,0 +1,14 @@
+diff --git a/Documentation/devicetree/bindings/watchdog/xlnx,versal-wwdt.yaml b/Documentation/devicetree/bindings/watchdog/xlnx,versal-wwdt.yaml
+index 14b069599..fccfc785a 100644
+--- a/Documentation/devicetree/bindings/watchdog/xlnx,versal-wwdt.yaml
++++ b/Documentation/devicetree/bindings/watchdog/xlnx,versal-wwdt.yaml
+@@ -32,6 +32,9 @@ properties:
+   clocks:
+     maxItems: 1
+ 
++  power-domains:
++    maxItems: 1
++
+ required:
+   - compatible
+   - reg

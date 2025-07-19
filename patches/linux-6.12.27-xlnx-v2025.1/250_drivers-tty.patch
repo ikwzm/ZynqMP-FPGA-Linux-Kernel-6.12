@@ -1,0 +1,26 @@
+diff --git a/Documentation/devicetree/bindings/serial/pl011.yaml b/Documentation/devicetree/bindings/serial/pl011.yaml
+index 957104103..3fcf2d042 100644
+--- a/Documentation/devicetree/bindings/serial/pl011.yaml
++++ b/Documentation/devicetree/bindings/serial/pl011.yaml
+@@ -92,6 +92,9 @@ properties:
+       3000ms.
+     default: 3000
+ 
++  power-domains:
++    maxItems: 1
++
+   resets:
+     maxItems: 1
+ 
+diff --git a/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml b/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml
+index 08dcb275d..fbc0fe92a 100644
+--- a/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml
++++ b/Documentation/devicetree/bindings/serial/xlnx,opb-uartlite.yaml
+@@ -15,6 +15,7 @@ properties:
+       enum:
+         - xlnx,xps-uartlite-1.00.a
+         - xlnx,opb-uartlite-1.00.b
++        - xlnx,axi-uartlite-rs485
+ 
+   reg:
+     maxItems: 1
