@@ -1,0 +1,144 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+#
+# install-extmod-build(generic)
+# 
+set -eu
+
+script_name=$0
+verbose=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+	-v|--verbose)
+	    verbose=1
+	    shift
+	    ;;
+	-a|--arch)
+	    shift
+	    [ $# -eq 0 ] && echo "Missing argument for $1" >&2 && exit 1
+	    SRCARCH=$1
+	    shift
+	    ;;
+	-s|--srctree)
+	    shift
+	    [ $# -eq 0 ] && echo "Missing argument for $1" >&2 && exit 1
+	    srctree=$1
+	    shift
+	    ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+	*)
+	    destdir=$1
+	    shift
+	    ;;
+    esac
+done
+
+test -n "${destdir}"
+test -n "${srctree}"
+test -n "${SRCARCH}"
+
+if [ $verbose -gt 0 ]; then
+    echo "## $script_name: destdir = ${destdir}"
+    echo "## $script_name: srctree = ${srctree}"
+    echo "## $script_name: SRCARCH = ${SRCARCH}"
+fi
+
+#
+# start scripts/package/install-extmod-build
+# 
+is_enabled() {
+	grep -q "^$1=y" include/config/auto.conf
+}
+
+find_in_scripts() {
+	find scripts \
+		\( -name atomic -o -name dtc -o -name kconfig -o -name package \) -prune -o \
+		! -name unifdef -a ! -name mk_elfconfig -a \( -type f -o -type l \) -print
+}
+
+mkdir -p "${destdir}"
+
+(
+	cd "${srctree}"
+	echo Makefile
+	find "arch/${SRCARCH}" -maxdepth 1 -name 'Makefile*'
+	find "arch/${SRCARCH}" -name generated -prune -o -name include -type d -print
+	find "arch/${SRCARCH}" -name Kbuild.platforms -o -name Platform
+	find include \( -name config -o -name generated \) -prune -o \( -type f -o -type l \) -print
+	find_in_scripts
+) | tar -c -f - -C "${srctree}" -T - | tar -xf - -C "${destdir}"
+
+(
+	cd "${srctree}"
+	if is_enabled CONFIG_OBJTOOL; then
+		echo tools/objtool/objtool
+	fi
+
+	echo Module.symvers
+	echo "arch/${SRCARCH}/include/generated"
+	echo include/config/auto.conf
+	echo include/config/kernel.release
+	echo include/generated
+	find_in_scripts
+
+	if is_enabled CONFIG_GCC_PLUGINS; then
+		find scripts/gcc-plugins -name '*.so'
+	fi
+) | tar -c -f - -C "${srctree}" -T - | tar -xf - -C "${destdir}"
+
+find "${destdir}" \( -name '.*.cmd' -o -name '*.o' \) -delete
+#
+# end of scripts/package/install-extmod-build
+# 
+
+#
+# copy files for postinst
+#
+(
+	cd "${srctree}"
+	find . \( -name Makefile\* -o -name Kconfig\* -o -name \*.pl \) -print
+	find include tools/include security/selinux/include \( -type f -o -type l \) -print
+	find scripts \( -type f -o -type l \) -print
+	find "arch/${SRCARCH}" \( -name Kbuild.platforms -o -name Platform \) -print
+	find $(find "arch/${SRCARCH}" -name include -o -name scripts -o -name tools -type d) -type f
+) | tar -c -f - -C "${srctree}" -T - | tar -xf - -C "${destdir}"
+#
+# remove binary files for postinst
+#
+find "${destdir}" -type f -exec file {} + | grep 'ELF' | cut -d: -f1 | xargs rm -f
+#
+# copy .config manually to be where it's expected to be
+#
+cp "${srctree}/.config" "${destdir}/.config"
+#
+# patch Makefile for postinst
+# 
+cat <<-'EOF' | patch -p0 -d "${destdir}"
+--- Makefile	2025-07-26 15:43:33.031678200 +0900
++++ Makefile	2025-07-26 15:41:24.334781500 +0900
+@@ -276,6 +276,7 @@
+ 			 outputmakefile rustavailable rustfmt rustfmtcheck
+ no-sync-config-targets := $(no-dot-config-targets) %install modules_sign kernelrelease \
+ 			  image_name
++no-sync-config-targets += linux-headers-postinst
+ single-targets := %.a %.i %.ko %.lds %.ll %.lst %.mod %.o %.rsi %.s %.symtypes %/
+ 
+ config-build	:=
+@@ -1220,6 +1221,11 @@
+ 	$(Q)$(MAKE) $(build)=scripts/mod
+ 	$(Q)$(MAKE) $(build)=. prepare
+ 
++# linux-headers debian package postinst
++PHONY += linux-headers-postinst
++linux-headers-postinst: archscripts scripts
++	$(Q)$(MAKE) $(build)=scripts/mod
++
+ # All the preparing..
+ prepare: prepare0
+ ifdef CONFIG_RUST
+EOF
