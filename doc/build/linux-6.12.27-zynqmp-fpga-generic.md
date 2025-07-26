@@ -31,7 +31,7 @@ shell$ sh ../patches/linux-6.12.27-xlnx-v2025.1/zynqmp_fpga_patch.sh
 ### Patch for scripts/package/mkdebian
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.27-zynqmp-fpga-builddeb-1.diff
+shell$ patch -p1 < ../patches/linux-6.12.27-zynqmp-fpga-builddeb.diff
 shell$ git add --all
 shell$ git commit -m "[patch] scripts/package/mkdebian"
 ```
@@ -90,8 +90,8 @@ shell$ git commit -m "[add] zynqmp_fpga_generic_defconfig to arch/arm64/configs"
 ### Create tag and .version
 
 ```console
-shell$ git tag -a v6.12.27-zynqmp-fpga -m "release v6.12.27-zynqmp-fpga-generic-2"
-shell$ echo 1 > .version
+shell$ git tag -a v6.12.27-zynqmp-fpga -m "release v6.12.27-zynqmp-fpga-generic-3"
+shell$ echo 2 > .version
 ```
 
 ## Build
@@ -116,13 +116,13 @@ shell$ make deb-pkg
 ### Install kernel image to this repository
 
 ```console
-shell$ cp arch/arm64/boot/Image.gz ../vmlinuz-6.12.27-zynqmp-fpga-generic-2
-shell$ cp .config             ../files/config-6.12.27-zynqmp-fpga-generic-2
+shell$ cp arch/arm64/boot/Image.gz ../vmlinuz-6.12.27-zynqmp-fpga-generic-3
+shell$ cp .config             ../files/config-6.12.27-zynqmp-fpga-generic-3
 ```
 
 ### Install devicetree to this repository
 
 ```console
-shell$ install -d ../devicetrees/6.12.27-zynqmp-fpga-generic-2
-shell$ cp arch/arm64/boot/dts/xilinx/* ../devicetrees/6.12.27-zynqmp-fpga-generic-2
+shell$ install -d ../devicetrees/6.12.27-zynqmp-fpga-generic-3
+shell$ cp arch/arm64/boot/dts/xilinx/* ../devicetrees/6.12.27-zynqmp-fpga-generic-3
 ```

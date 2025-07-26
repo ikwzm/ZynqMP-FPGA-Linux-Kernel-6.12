@@ -5,7 +5,7 @@ KERNEL_VERSION=6.12.27
 KERNEL_EXTRA_VERSION=-zynqmp-fpga
 KERNEL_LOCAL_VERSION=-generic
 KERNEL_STABLE_VERSION=v$KERNEL_VERSION
-BUILD_VERSION=2
+BUILD_VERSION=3
 KERNEL_RELEASE=$KERNEL_VERSION$KERNEL_EXTRA_VERSION$KERNEL_LOCAL_VERSION
 KERNEL_VERSION_TAG=v$KERNEL_VERSION$KERNEL_EXTRA_VERSION
 LINUX_BUILD_DIR=linux-$KERNEL_RELEASE
@@ -31,13 +31,13 @@ git checkout -b $KERNEL_RELEASE refs/tags/$KERNEL_STABLE_VERSION
 
 ## Patch to Linux Kernel
 
-### Patch for linux-6.6.70-xlnx-2024.2
+### Patch for linux-6.12.27-xlnx-2025.1
 
 sh ../patches/linux-$KERNEL_VERSION-xlnx-v2025.1/$PATCH_SCRIPT
 
 ### Patch for builddeb
 
-patch -p1 < ../patches/linux-$KERNEL_VERSION$KERNEL_EXTRA_VERSION-builddeb-1.diff
+patch -p1 < ../patches/linux-$KERNEL_VERSION$KERNEL_EXTRA_VERSION-builddeb.diff
 git add --all
 git commit -m "[patch] scripts/package/mkdebian"
 
