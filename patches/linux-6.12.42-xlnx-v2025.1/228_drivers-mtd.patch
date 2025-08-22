@@ -3523,7 +3523,7 @@ index 5b1117265..41c0a111f 100644
  
  		case SFDP_PROFILE1_ID:
 diff --git a/drivers/mtd/spi-nor/spansion.c b/drivers/mtd/spi-nor/spansion.c
-index fcd081b75..77fcb2192 100644
+index fcd081b75..f1c8b4497 100644
 --- a/drivers/mtd/spi-nor/spansion.c
 +++ b/drivers/mtd/spi-nor/spansion.c
 @@ -34,6 +34,8 @@
@@ -3662,7 +3662,7 @@ index fcd081b75..77fcb2192 100644
  	int ret;
  	u8 i;
  
-@@ -531,20 +538,70 @@ static int cypress_nor_get_page_size(struct spi_nor *nor)
+@@ -531,25 +538,75 @@ static int cypress_nor_get_page_size(struct spi_nor *nor)
  
  static void cypress_nor_ecc_init(struct spi_nor *nor)
  {
@@ -3734,6 +3734,12 @@ index fcd081b75..77fcb2192 100644
  	struct spi_mem_op op;
  	int ret;
  
+ 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
+ 
+ 	ret = cypress_nor_set_addr_mode_nbytes(nor);
+ 	if (ret)
 @@ -557,7 +614,7 @@ s25fs256t_post_bfpt_fixup(struct spi_nor *nor,
  
  	/* Read Architecture Configuration Register (ARCFN) */
@@ -3752,7 +3758,36 @@ index fcd081b75..77fcb2192 100644
  
  	/*
  	 * S25FS256T does not define the SCCR map, but we would like to use the
-@@ -667,7 +724,7 @@ static int s25hx_t_post_sfdp_fixup(struct spi_nor *nor)
+@@ -614,24 +671,25 @@ s25hx_t_post_bfpt_fixup(struct spi_nor *nor,
+ 			const struct sfdp_parameter_header *bfpt_header,
+ 			const struct sfdp_bfpt *bfpt)
+ {
++	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
+ 	int ret;
+ 
+ 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
+ 
+ 	ret = cypress_nor_set_addr_mode_nbytes(nor);
+ 	if (ret)
+ 		return ret;
+ 
+ 	/* Replace Quad Enable with volatile version */
+-	nor->params->quad_enable = cypress_nor_quad_enable_volatile;
++	params->quad_enable = cypress_nor_quad_enable_volatile;
+ 
+ 	return 0;
+ }
+ 
+ static int s25hx_t_post_sfdp_fixup(struct spi_nor *nor)
+ {
+-	struct spi_nor_flash_parameter *params = nor->params;
++	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
+ 	struct spi_nor_erase_type *erase_type = params->erase_map.erase_type;
+ 	unsigned int i;
+ 
+@@ -667,7 +725,7 @@ static int s25hx_t_post_sfdp_fixup(struct spi_nor *nor)
  
  static int s25hx_t_late_init(struct spi_nor *nor)
  {
@@ -3761,7 +3796,7 @@ index fcd081b75..77fcb2192 100644
  
  	/* Fast Read 4B requires mode cycles */
  	params->reads[SNOR_CMD_READ_FAST].num_mode_clocks = 8;
-@@ -702,7 +759,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
+@@ -702,7 +760,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
  
  static int s28hx_t_post_sfdp_fixup(struct spi_nor *nor)
  {
@@ -3770,7 +3805,18 @@ index fcd081b75..77fcb2192 100644
  
  	if (!params->n_dice || !params->vreg_offset) {
  		dev_err(nor->dev, "%s failed. The volatile register offset could not be retrieved from SFDP.\n",
-@@ -754,7 +811,7 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
+@@ -746,15 +804,17 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
+ 				   const struct sfdp_parameter_header *bfpt_header,
+ 				   const struct sfdp_bfpt *bfpt)
+ {
++	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++
+ 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
+ 
+ 	return cypress_nor_set_addr_mode_nbytes(nor);
+ }
  
  static int s28hx_t_late_init(struct spi_nor *nor)
  {
@@ -3779,7 +3825,7 @@ index fcd081b75..77fcb2192 100644
  
  	params->set_octal_dtr = cypress_nor_set_octal_dtr;
  	params->ready = cypress_nor_sr_ready_and_clear;
-@@ -763,24 +820,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
+@@ -763,24 +823,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
  	return 0;
  }
  
@@ -3825,7 +3871,7 @@ index fcd081b75..77fcb2192 100644
  
  	return 0;
  }
-@@ -825,6 +902,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -825,6 +905,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl256s0",
  		.size = SZ_32M,
  		.sector_size = SZ_256K,
@@ -3833,7 +3879,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SPI_NOR_SKIP_SFDP | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -838,6 +916,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -838,6 +919,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x02, 0x19, 0x4d, 0x01, 0x80),
  		.name = "s25fl256s1",
  		.size = SZ_32M,
@@ -3841,7 +3887,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -851,7 +930,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -851,7 +933,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl512s",
  		.size = SZ_64M,
  		.sector_size = SZ_256K,
@@ -3850,7 +3896,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -876,6 +955,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -876,6 +958,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl128s0",
  		.size = SZ_16M,
  		.sector_size = SZ_256K,
@@ -3858,7 +3904,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -889,6 +969,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -889,6 +972,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x20, 0x18, 0x4d, 0x01, 0x80),
  		.name = "s25fl128s1",
  		.size = SZ_16M,
@@ -3866,7 +3912,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -933,18 +1014,21 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -933,18 +1017,21 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x60, 0x17),
  		.name = "s25fl064l",
  		.size = SZ_8M,
@@ -3888,7 +3934,7 @@ index fcd081b75..77fcb2192 100644
  		.no_sfdp_flags = SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.fixup_flags = SPI_NOR_4B_OPCODES,
  	}, {
-@@ -966,6 +1050,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -966,6 +1053,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2a, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hl02gt",
@@ -3896,7 +3942,7 @@ index fcd081b75..77fcb2192 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -986,6 +1071,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -986,6 +1074,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2b, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hs02gt",
@@ -3904,7 +3950,7 @@ index fcd081b75..77fcb2192 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -1016,7 +1102,8 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -1016,7 +1105,8 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x34, 0x5b, 0x1c),
  		.name = "s28hs02gt",
  		.mfr_flags = USE_CLPEF,
@@ -3914,7 +3960,7 @@ index fcd081b75..77fcb2192 100644
  	}, {
  		.id = SNOR_ID(0xef, 0x40, 0x13),
  		.name = "s25fl004k",
-@@ -1081,7 +1168,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
+@@ -1081,7 +1171,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
  
  static int spansion_nor_late_init(struct spi_nor *nor)
  {

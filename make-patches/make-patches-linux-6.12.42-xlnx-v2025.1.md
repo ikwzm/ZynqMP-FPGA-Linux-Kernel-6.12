@@ -1091,10 +1091,97 @@ shell$ diff -p ../linux-6.12.27/drivers/mtd/spi-nor/spansion.c ../linux-6.12.42/
 ```
 
 ```console
-shell$ cp ../linux-6.12.42-xlnx-v2025.1/drivers/mtd/spi-nor/spansion.c drivers/mtd/spi-nor/spansion.c
 shell$ rm drivers/mtd/spi-nor/spansion.c.orig
 shell$ rm drivers/mtd/spi-nor/spansion.c.rej
+shell$ cp ../linux-6.12.27-xlnx-v2025.1/drivers/mtd/spi-nor/spansion.c drivers/mtd/spi-nor/spansion.c
 ```
+
+#### Modify drivers/mtd/spi-nor/spansion.c
+
+```console
+shell$ git diff
+diff --git a/drivers/mtd/spi-nor/spansion.c b/drivers/mtd/spi-nor/spansion.c
+index 69ba7fd80..f1c8b4497 100644
+--- a/drivers/mtd/spi-nor/spansion.c
++++ b/drivers/mtd/spi-nor/spansion.c
+@@ -17,6 +17,7 @@
+ 
+ #define SPINOR_OP_CLSR		0x30	/* Clear status register 1 */
+ #define SPINOR_OP_CLPEF		0x82	/* Clear program/erase failure flags */
++#define SPINOR_OP_CYPRESS_EX4B	0xB8	/* Exit 4-byte address mode */
+ #define SPINOR_OP_CYPRESS_DIE_ERASE		0x61	/* Chip (die) erase */
+ #define SPINOR_OP_RD_ANY_REG			0x65	/* Read any register */
+ #define SPINOR_OP_WR_ANY_REG			0x71	/* Write any register */
+@@ -60,6 +61,13 @@
+ 		   SPI_MEM_OP_DUMMY(ndummy, 0),				\
+ 		   SPI_MEM_OP_DATA_IN(1, buf, 0))
+ 
++#define CYPRESS_NOR_EN4B_EX4B_OP(enable)				\
++	SPI_MEM_OP(SPI_MEM_OP_CMD(enable ? SPINOR_OP_EN4B :		\
++					   SPINOR_OP_CYPRESS_EX4B, 0),	\
++		   SPI_MEM_OP_NO_ADDR,					\
++		   SPI_MEM_OP_NO_DUMMY,					\
++		   SPI_MEM_OP_NO_DATA)
++
+ #define SPANSION_OP(opcode)						\
+ 	SPI_MEM_OP(SPI_MEM_OP_CMD(opcode, 0),				\
+ 		   SPI_MEM_OP_NO_ADDR,					\
+@@ -362,6 +370,20 @@ static int cypress_nor_quad_enable_volatile(struct spi_nor *nor)
+ 	return 0;
+ }
+ 
++static int cypress_nor_set_4byte_addr_mode(struct spi_nor *nor, bool enable)
++{
++	int ret;
++	struct spi_mem_op op = CYPRESS_NOR_EN4B_EX4B_OP(enable);
++
++	spi_nor_spimem_setup_op(nor, &op, nor->reg_proto);
++
++	ret = spi_mem_exec_op(nor->spimem, &op);
++	if (ret)
++		dev_dbg(nor->dev, "error %d setting 4-byte mode\n", ret);
++
++	return ret;
++}
++
+ /**
+  * cypress_nor_determine_addr_mode_by_sr1() - Determine current address mode
+  *                                            (3 or 4-byte) by querying status
+@@ -583,6 +605,9 @@ s25fs256t_post_bfpt_fixup(struct spi_nor *nor,
+ 	struct spi_mem_op op;
+ 	int ret;
+ 
++	/* Assign 4-byte address mode method that is not determined in BFPT */
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++
+ 	ret = cypress_nor_set_addr_mode_nbytes(nor);
+ 	if (ret)
+ 		return ret;
+@@ -646,8 +671,11 @@ s25hx_t_post_bfpt_fixup(struct spi_nor *nor,
+ 			const struct sfdp_parameter_header *bfpt_header,
+ 			const struct sfdp_bfpt *bfpt)
+ {
+-	int ret;
+ 	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	int ret;
++
++	/* Assign 4-byte address mode method that is not determined in BFPT */
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
+ 
+ 	ret = cypress_nor_set_addr_mode_nbytes(nor);
+ 	if (ret)
+@@ -776,6 +804,11 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
+ 				   const struct sfdp_parameter_header *bfpt_header,
+ 				   const struct sfdp_bfpt *bfpt)
+ {
++	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++
++	/* Assign 4-byte address mode method that is not determined in BFPT */
++	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++
+ 	return cypress_nor_set_addr_mode_nbytes(nor);
+ }
+``` 
 
 ```console
 shell$ git add --all
