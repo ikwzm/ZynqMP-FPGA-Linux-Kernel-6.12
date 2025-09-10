@@ -2,7 +2,7 @@
 
 There are two ways
 
-1. run scripts/build-linux-6.12.42-zynqmp-fpga-generic.sh (easy)
+1. run scripts/build-linux-6.12.45-zynqmp-fpga-generic.sh (easy)
 2. run this chapter step-by-step (annoying)
 
 ## Download Linux Kernel Source
@@ -10,14 +10,14 @@ There are two ways
 ### Clone from linux-stable.git
 
 ```console
-shell$ git clone --depth 1 -b v6.12.42 git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux-6.12.42-zynqmp-fpga-generic
+shell$ git clone --depth 1 -b v6.12.45 git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git linux-6.12.45-zynqmp-fpga-generic
 ```
 
-### Make Branch linux-6.12.42-zynqmp-fpga-generic
+### Make Branch linux-6.12.45-zynqmp-fpga-generic
 
 ```console
-shell$ cd linux-6.12.42-zynqmp-fpga-generic
-shell$ git checkout -b linux-6.12.42-zynqmp-fpga-generic refs/tags/v6.12.42
+shell$ cd linux-6.12.45-zynqmp-fpga-generic
+shell$ git checkout -b linux-6.12.45-zynqmp-fpga-generic refs/tags/v6.12.45
 ```
 
 ## Patch to Linux Kernel
@@ -25,13 +25,13 @@ shell$ git checkout -b linux-6.12.42-zynqmp-fpga-generic refs/tags/v6.12.42
 ### Patch for linux-xlnx-v2025.1
 
 ```console
-shell$ sh ../patches/linux-6.12.42-xlnx-v2025.1/zynqmp_fpga_patch.sh 
+shell$ sh ../patches/linux-6.12.45-xlnx-v2025.1/zynqmp_fpga_patch.sh 
 ```
 
 ### Patch for scripts/package/mkdebian
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-builddeb.diff
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-builddeb.diff
 shell$ git add --all
 shell$ git commit -m "[patch] scripts/package/mkdebian"
 ```
@@ -41,8 +41,8 @@ shell$ git commit -m "[patch] scripts/package/mkdebian"
 ```console
 shell$ rm -rf drivers/net/wireless/microchip/wilc
 shell$ cp -r ../patches/microchip-wilc-driver/wilc1000 drivers/net/wireless/microchip/wilc
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-wilc.diff 
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-pwrseq-wilc.diff
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-wilc.diff 
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-pwrseq-wilc.diff
 shell$ git add --all
 shell$ git commit -m "[add] drivers/net/wireless/microchip/wilc"
 ```
@@ -50,7 +50,7 @@ shell$ git commit -m "[add] drivers/net/wireless/microchip/wilc"
 ### Patch for Ultra96
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-ultra96.diff
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-ultra96.diff
 shell$ git add --all
 shell$ git commit -m "[patch] for Ultra96."
 ```
@@ -58,7 +58,7 @@ shell$ git commit -m "[patch] for Ultra96."
 ### Patch for Ultra96-V2
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-ultra96v2.diff 
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-ultra96v2.diff 
 shell$ git add --all
 shell$ git commit -m "[patch] for Ultra96-V2."
 ```
@@ -66,7 +66,7 @@ shell$ git commit -m "[patch] for Ultra96-V2."
 ### Patch for Kria KV260
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-kv260.diff 
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-kv260.diff 
 shell$ git add --all
 shell$ git commit -m "[patch] for Kria KV260."
 ```
@@ -74,7 +74,7 @@ shell$ git commit -m "[patch] for Kria KV260."
 ### Patch for Kria KR260
 
 ```console
-shell$ patch -p1 < ../patches/linux-6.12.42-zynqmp-fpga-kr260.diff 
+shell$ patch -p1 < ../patches/linux-6.12.45-zynqmp-fpga-kr260.diff 
 shell$ git add --all
 shell$ git commit -m "[patch] for Kria KR260."
 ```
@@ -90,7 +90,7 @@ shell$ git commit -m "[add] zynqmp_fpga_generic_defconfig to arch/arm64/configs"
 ### Create tag and .version
 
 ```console
-shell$ git tag -a v6.12.42-zynqmp-fpga -m "release v6.12.42-zynqmp-fpga-generic-1"
+shell$ git tag -a v6.12.45-zynqmp-fpga -m "release v6.12.45-zynqmp-fpga-generic-1"
 shell$ echo 0 > .version
 ```
 
@@ -99,7 +99,7 @@ shell$ echo 0 > .version
 ### Setup for Build 
 
 ```console
-shell$ cd linux-6.12.42-zynqmp-fpga-generic
+shell$ cd linux-6.12.45-zynqmp-fpga-generic
 shell$ export ARCH=arm64
 shell$ export CROSS_COMPILE=aarch64-linux-gnu-
 shell$ make zynqmp_fpga_generic_defconfig
@@ -116,13 +116,13 @@ shell$ make deb-pkg
 ### Install kernel image to this repository
 
 ```console
-shell$ cp arch/arm64/boot/Image.gz ../vmlinuz-6.12.42-zynqmp-fpga-generic-1
-shell$ cp .config             ../files/config-6.12.42-zynqmp-fpga-generic-1
+shell$ cp arch/arm64/boot/Image.gz ../vmlinuz-6.12.45-zynqmp-fpga-generic-1
+shell$ cp .config             ../files/config-6.12.45-zynqmp-fpga-generic-1
 ```
 
 ### Install devicetree to this repository
 
 ```console
-shell$ install -d ../devicetrees/6.12.42-zynqmp-fpga-generic-1
-shell$ cp arch/arm64/boot/dts/xilinx/* ../devicetrees/6.12.42-zynqmp-fpga-generic-1
+shell$ install -d ../devicetrees/6.12.45-zynqmp-fpga-generic-1
+shell$ cp arch/arm64/boot/dts/xilinx/* ../devicetrees/6.12.45-zynqmp-fpga-generic-1
 ```
