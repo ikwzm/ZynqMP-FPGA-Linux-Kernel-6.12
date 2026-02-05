@@ -2534,7 +2534,7 @@ CONFIG_XILINX_DPU=m
 #### 
 #### Xilinx AI engine
 #### 
-CONFIG_XILINX_AIE=y
+CONFIG_XILINX_AIE=m
 
 #### 
 #### Xilinx PUF driver
