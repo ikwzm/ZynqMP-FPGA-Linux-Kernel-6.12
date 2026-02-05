@@ -1,0 +1,2060 @@
+diff --git a/drivers/i2c/busses/i2c-cadence.c b/drivers/i2c/busses/i2c-cadence.c
+index 87b9ba95b..ee2f32cd5 100644
+--- a/drivers/i2c/busses/i2c-cadence.c
++++ b/drivers/i2c/busses/i2c-cadence.c
+@@ -129,6 +129,7 @@
+ 
+ #define CDNS_I2C_BROKEN_HOLD_BIT	BIT(0)
+ #define CDNS_I2C_POLL_US	100000
++#define CDNS_I2C_POLL_US_ATOMIC	10
+ #define CDNS_I2C_TIMEOUT_US	500000
+ 
+ #define cdns_i2c_readreg(offset)       readl_relaxed(id->membase + offset)
+@@ -189,6 +190,8 @@ enum cdns_i2c_slave_state {
+  * @slave_state:	I2C Slave state(idle/read/write).
+  * @fifo_depth:		The depth of the transfer FIFO
+  * @transfer_size:	The maximum number of bytes in one transfer
++ * @atomic:		Mode of transfer
++ * @err_status_atomic:	Error status in atomic mode
+  */
+ struct cdns_i2c {
+ 	struct device		*dev;
+@@ -219,6 +222,8 @@ struct cdns_i2c {
+ #endif
+ 	u32 fifo_depth;
+ 	unsigned int transfer_size;
++	bool atomic;
++	int err_status_atomic;
+ };
+ 
+ struct cdns_platform_data {
+@@ -228,6 +233,66 @@ struct cdns_platform_data {
+ #define to_cdns_i2c(_nb)	container_of(_nb, struct cdns_i2c, \
+ 					     clk_rate_change_nb)
+ 
++/**
++ * cdns_i2c_init -  Controller initialisation
++ * @id:		Device private data structure
++ *
++ * Initialise the i2c controller.
++ *
++ */
++static void cdns_i2c_init(struct cdns_i2c *id)
++{
++	cdns_i2c_writereg(id->ctrl_reg, CDNS_I2C_CR_OFFSET);
++	/*
++	 * Cadence I2C controller has a bug wherein it generates
++	 * invalid read transaction after HW timeout in master receiver mode.
++	 * HW timeout is not used by this driver and the interrupt is disabled.
++	 * But the feature itself cannot be disabled. Hence maximum value
++	 * is written to this register to reduce the chances of error.
++	 */
++	cdns_i2c_writereg(CDNS_I2C_TIMEOUT_MAX, CDNS_I2C_TIME_OUT_OFFSET);
++}
++
++/**
++ * cdns_i2c_runtime_suspend -  Runtime suspend method for the driver
++ * @dev:	Address of the platform_device structure
++ *
++ * Put the driver into low power mode.
++ *
++ * Return: 0 always
++ */
++static int cdns_i2c_runtime_suspend(struct device *dev)
++{
++	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
++
++	clk_disable(xi2c->clk);
++
++	return 0;
++}
++
++/**
++ * cdns_i2c_runtime_resume - Runtime resume
++ * @dev:	Address of the platform_device structure
++ *
++ * Runtime resume callback.
++ *
++ * Return: 0 on success and error value on error
++ */
++static int cdns_i2c_runtime_resume(struct device *dev)
++{
++	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
++	int ret;
++
++	ret = clk_enable(xi2c->clk);
++	if (ret) {
++		dev_err(dev, "Cannot enable clock.\n");
++		return ret;
++	}
++	cdns_i2c_init(xi2c);
++
++	return 0;
++}
++
+ /**
+  * cdns_i2c_clear_bus_hold - Clear bus hold bit
+  * @id:	Pointer to driver data struct
+@@ -561,6 +626,89 @@ static irqreturn_t cdns_i2c_isr(int irq, void *ptr)
+ 	return cdns_i2c_master_isr(ptr);
+ }
+ 
++static bool cdns_i2c_error_check(struct cdns_i2c *id)
++{
++	unsigned int isr_status;
++
++	id->err_status = 0;
++
++	isr_status = cdns_i2c_readreg(CDNS_I2C_ISR_OFFSET);
++	cdns_i2c_writereg(isr_status & CDNS_I2C_IXR_ERR_INTR_MASK, CDNS_I2C_ISR_OFFSET);
++
++	id->err_status = isr_status & CDNS_I2C_IXR_ERR_INTR_MASK;
++
++	return !!id->err_status;
++}
++
++static void cdns_i2c_mrecv_atomic(struct cdns_i2c *id)
++{
++	while (id->recv_count > 0) {
++		bool updatetx;
++
++		/*
++		 * Check if transfer size register needs to be updated again for a
++		 * large data receive operation.
++		 */
++		updatetx = id->recv_count > id->curr_recv_count;
++
++		while (id->curr_recv_count > 0) {
++			if (cdns_i2c_readreg(CDNS_I2C_SR_OFFSET) & CDNS_I2C_SR_RXDV) {
++				*id->p_recv_buf = cdns_i2c_readreg(CDNS_I2C_DATA_OFFSET);
++				id->p_recv_buf++;
++				id->recv_count--;
++				id->curr_recv_count--;
++
++				/*
++				 * Clear the hold bit that was set for FIFO control,
++				 * if the remaining RX data is less than or equal to
++				 * the FIFO depth, unless a repeated start is selected.
++				 */
++				if (id->recv_count <= id->fifo_depth && !id->bus_hold_flag)
++					cdns_i2c_clear_bus_hold(id);
++			}
++			if (cdns_i2c_error_check(id))
++				return;
++			if (cdns_is_holdquirk(id, updatetx))
++				break;
++		}
++
++		/*
++		 * The controller sends NACK to the slave/target when transfer size
++		 * register reaches zero without considering the HOLD bit.
++		 * This workaround is implemented for large data transfers to
++		 * maintain transfer size non-zero while performing a large
++		 * receive operation.
++		 */
++		if (cdns_is_holdquirk(id, updatetx)) {
++			/* wait while fifo is full */
++			while (cdns_i2c_readreg(CDNS_I2C_XFER_SIZE_OFFSET) !=
++			       (id->curr_recv_count - id->fifo_depth))
++				;
++
++			/*
++			 * Check number of bytes to be received against maximum
++			 * transfer size and update register accordingly.
++			 */
++			if ((id->recv_count - id->fifo_depth) >
++			    id->transfer_size) {
++				cdns_i2c_writereg(id->transfer_size,
++						  CDNS_I2C_XFER_SIZE_OFFSET);
++				id->curr_recv_count = id->transfer_size +
++						      id->fifo_depth;
++			} else {
++				cdns_i2c_writereg(id->recv_count -
++						  id->fifo_depth,
++						  CDNS_I2C_XFER_SIZE_OFFSET);
++				id->curr_recv_count = id->recv_count;
++			}
++		}
++	}
++
++	/* Clear hold (if not repeated start) */
++	if (!id->recv_count && !id->bus_hold_flag)
++		cdns_i2c_clear_bus_hold(id);
++}
++
+ /**
+  * cdns_i2c_mrecv - Prepare and start a master receive operation
+  * @id:		pointer to the i2c device structure
+@@ -655,7 +803,34 @@ static void cdns_i2c_mrecv(struct cdns_i2c *id)
+ 		cdns_i2c_writereg(addr, CDNS_I2C_ADDR_OFFSET);
+ 	}
+ 
+-	cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	if (!id->atomic)
++		cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	else
++		cdns_i2c_mrecv_atomic(id);
++}
++
++static void cdns_i2c_msend_rem_atomic(struct cdns_i2c *id)
++{
++	while (id->send_count) {
++		unsigned int avail_bytes;
++		unsigned int bytes_to_send;
++
++		avail_bytes = id->fifo_depth - cdns_i2c_readreg(CDNS_I2C_XFER_SIZE_OFFSET);
++		if (id->send_count > avail_bytes)
++			bytes_to_send = avail_bytes;
++		else
++			bytes_to_send = id->send_count;
++
++		while (bytes_to_send--) {
++			cdns_i2c_writereg((*id->p_send_buf++), CDNS_I2C_DATA_OFFSET);
++			id->send_count--;
++		}
++		if (cdns_i2c_error_check(id))
++			return;
++	}
++
++	if (!id->send_count && !id->bus_hold_flag)
++		cdns_i2c_clear_bus_hold(id);
+ }
+ 
+ /**
+@@ -718,7 +893,10 @@ static void cdns_i2c_msend(struct cdns_i2c *id)
+ 	cdns_i2c_writereg(id->p_msg->addr & CDNS_I2C_ADDR_MASK,
+ 						CDNS_I2C_ADDR_OFFSET);
+ 
+-	cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	if (!id->atomic)
++		cdns_i2c_writereg(CDNS_I2C_ENABLED_INTR_MASK, CDNS_I2C_IER_OFFSET);
++	else if (id->send_count > 0)
++		cdns_i2c_msend_rem_atomic(id);
+ }
+ 
+ /**
+@@ -758,7 +936,8 @@ static int cdns_i2c_process_msg(struct cdns_i2c *id, struct i2c_msg *msg,
+ 
+ 	id->p_msg = msg;
+ 	id->err_status = 0;
+-	reinit_completion(&id->xfer_done);
++	if (!id->atomic)
++		reinit_completion(&id->xfer_done);
+ 
+ 	/* Check for the TEN Bit mode on each msg */
+ 	reg = cdns_i2c_readreg(CDNS_I2C_CR_OFFSET);
+@@ -780,14 +959,31 @@ static int cdns_i2c_process_msg(struct cdns_i2c *id, struct i2c_msg *msg,
+ 
+ 	/* Minimal time to execute this message */
+ 	msg_timeout = msecs_to_jiffies((1000 * msg->len * BITS_PER_BYTE) / id->i2c_clk);
+-	/* Plus some wiggle room */
+-	msg_timeout += msecs_to_jiffies(500);
++
++	/*
++	 * Plus some wiggle room.
++	 * For non-atomic contexts, 500 ms is added to the timeout.
++	 * For atomic contexts, 2000 ms is added because transfers happen in polled
++	 * mode, requiring more time to account for the polling overhead.
++	 */
++	if (!id->atomic)
++		msg_timeout += msecs_to_jiffies(500);
++	else
++		msg_timeout += msecs_to_jiffies(2000);
+ 
+ 	if (msg_timeout < adap->timeout)
+ 		msg_timeout = adap->timeout;
+ 
+-	/* Wait for the signal of completion */
+-	time_left = wait_for_completion_timeout(&id->xfer_done, msg_timeout);
++	if (!id->atomic) {
++		/* Wait for the signal of completion */
++		time_left = wait_for_completion_timeout(&id->xfer_done, msg_timeout);
++	} else {
++		/* 0 is success, -ETIMEDOUT is error */
++		time_left = !readl_poll_timeout_atomic(id->membase + CDNS_I2C_ISR_OFFSET,
++						       reg, (reg & CDNS_I2C_IXR_COMP),
++						       CDNS_I2C_POLL_US_ATOMIC, msg_timeout);
++	}
++
+ 	if (time_left == 0) {
+ 		cdns_i2c_master_reset(adap);
+ 		return -ETIMEDOUT;
+@@ -806,58 +1002,31 @@ static int cdns_i2c_process_msg(struct cdns_i2c *id, struct i2c_msg *msg,
+ 	return 0;
+ }
+ 
+-/**
+- * cdns_i2c_master_xfer - The main i2c transfer function
+- * @adap:	pointer to the i2c adapter driver instance
+- * @msgs:	pointer to the i2c message structure
+- * @num:	the number of messages to transfer
+- *
+- * Initiates the send/recv activity based on the transfer message received.
+- *
+- * Return: number of msgs processed on success, negative error otherwise
+- */
+-static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+-				int num)
++static int cdns_i2c_master_common_xfer(struct i2c_adapter *adap,
++				       struct i2c_msg *msgs,
++				       int num)
+ {
+ 	int ret, count;
+ 	u32 reg;
+ 	struct cdns_i2c *id = adap->algo_data;
+ 	bool hold_quirk;
+-#if IS_ENABLED(CONFIG_I2C_SLAVE)
+-	bool change_role = false;
+-#endif
+-
+-	ret = pm_runtime_resume_and_get(id->dev);
+-	if (ret < 0)
+-		return ret;
+-
+-#if IS_ENABLED(CONFIG_I2C_SLAVE)
+-	/* Check i2c operating mode and switch if possible */
+-	if (id->dev_mode == CDNS_I2C_MODE_SLAVE) {
+-		if (id->slave_state != CDNS_I2C_SLAVE_STATE_IDLE) {
+-			ret = -EAGAIN;
+-			goto out;
+-		}
+-
+-		/* Set mode to master */
+-		cdns_i2c_set_mode(CDNS_I2C_MODE_MASTER, id);
+-
+-		/* Mark flag to change role once xfer is completed */
+-		change_role = true;
+-	}
+-#endif
+ 
+ 	/* Check if the bus is free */
+-
+-	ret = readl_relaxed_poll_timeout(id->membase + CDNS_I2C_SR_OFFSET,
+-					 reg,
+-					 !(reg & CDNS_I2C_SR_BA),
+-					 CDNS_I2C_POLL_US, CDNS_I2C_TIMEOUT_US);
++	if (!id->atomic)
++		ret = readl_relaxed_poll_timeout(id->membase + CDNS_I2C_SR_OFFSET,
++						 reg,
++						 !(reg & CDNS_I2C_SR_BA),
++						 CDNS_I2C_POLL_US, CDNS_I2C_TIMEOUT_US);
++	else
++		ret = readl_poll_timeout_atomic(id->membase + CDNS_I2C_SR_OFFSET,
++						reg,
++						!(reg & CDNS_I2C_SR_BA),
++						CDNS_I2C_POLL_US_ATOMIC, CDNS_I2C_TIMEOUT_US);
+ 	if (ret) {
+ 		ret = -EAGAIN;
+ 		if (id->adap.bus_recovery_info)
+ 			i2c_recover_bus(adap);
+-		goto out;
++		return ret;
+ 	}
+ 
+ 	hold_quirk = !!(id->quirks & CDNS_I2C_BROKEN_HOLD_BIT);
+@@ -877,8 +1046,7 @@ static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ 			if (msgs[count].flags & I2C_M_RD) {
+ 				dev_warn(adap->dev.parent,
+ 					 "Can't do repeated start after a receive message\n");
+-				ret = -EOPNOTSUPP;
+-				goto out;
++				return -EOPNOTSUPP;
+ 			}
+ 		}
+ 		id->bus_hold_flag = 1;
+@@ -896,26 +1064,65 @@ static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ 
+ 		ret = cdns_i2c_process_msg(id, msgs, adap);
+ 		if (ret)
+-			goto out;
++			return ret;
+ 
+ 		/* Report the other error interrupts to application */
+-		if (id->err_status) {
++		if (id->err_status || id->err_status_atomic) {
+ 			cdns_i2c_master_reset(adap);
+ 
+-			if (id->err_status & CDNS_I2C_IXR_NACK) {
+-				ret = -ENXIO;
+-				goto out;
+-			}
+-			ret = -EIO;
+-			goto out;
++			if (id->err_status & CDNS_I2C_IXR_NACK)
++				return -ENXIO;
++
++			return -EIO;
+ 		}
+ 	}
++	return 0;
++}
++
++/**
++ * cdns_i2c_master_xfer - The main i2c transfer function
++ * @adap:	pointer to the i2c adapter driver instance
++ * @msgs:	pointer to the i2c message structure
++ * @num:	the number of messages to transfer
++ *
++ * Initiates the send/recv activity based on the transfer message received.
++ *
++ * Return: number of msgs processed on success, negative error otherwise
++ */
++static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
++				int num)
++{
++	int ret;
++	struct cdns_i2c *id = adap->algo_data;
++#if IS_ENABLED(CONFIG_I2C_SLAVE)
++	bool change_role = false;
++#endif
+ 
+-	ret = num;
++	ret = pm_runtime_resume_and_get(id->dev);
++	if (ret < 0)
++		return ret;
+ 
+-out:
++#if IS_ENABLED(CONFIG_I2C_SLAVE)
++	/* Check i2c operating mode and switch if possible */
++	if (id->dev_mode == CDNS_I2C_MODE_SLAVE) {
++		if (id->slave_state != CDNS_I2C_SLAVE_STATE_IDLE) {
++			ret = -EAGAIN;
++			goto out;
++		}
++
++		/* Set mode to master */
++		cdns_i2c_set_mode(CDNS_I2C_MODE_MASTER, id);
++
++		/* Mark flag to change role once xfer is completed */
++		change_role = true;
++	}
++#endif
+ 
++	ret = cdns_i2c_master_common_xfer(adap, msgs, num);
++	if (!ret)
++		ret = num;
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
++out:
+ 	/* Switch i2c mode to slave */
+ 	if (change_role)
+ 		cdns_i2c_set_mode(CDNS_I2C_MODE_SLAVE, id);
+@@ -926,6 +1133,41 @@ static int cdns_i2c_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+ 	return ret;
+ }
+ 
++/**
++ * cdns_i2c_master_xfer_atomic - The i2c transfer function in atomic mode
++ * @adap:	pointer to the i2c adapter driver instance
++ * @msgs:	pointer to the i2c message structure
++ * @num:	the number of messages to transfer
++ *
++ * Return: number of msgs processed on success, negative error otherwise
++ */
++static int cdns_i2c_master_xfer_atomic(struct i2c_adapter *adap, struct i2c_msg *msgs,
++				       int num)
++{
++	int ret;
++	struct cdns_i2c *id = adap->algo_data;
++
++	ret = cdns_i2c_runtime_resume(id->dev);
++	if (ret)
++		return ret;
++
++	if (id->quirks & CDNS_I2C_BROKEN_HOLD_BIT) {
++		dev_warn(id->adap.dev.parent,
++			 "Atomic xfer not supported for version 1.0\n");
++		return 0;
++	}
++
++	id->atomic = true;
++	ret = cdns_i2c_master_common_xfer(adap, msgs, num);
++	if (!ret)
++		ret = num;
++
++	id->atomic = false;
++	cdns_i2c_runtime_suspend(id->dev);
++
++	return ret;
++}
++
+ /**
+  * cdns_i2c_func - Returns the supported features of the I2C driver
+  * @adap:	pointer to the i2c adapter structure
+@@ -990,6 +1232,7 @@ static int cdns_unreg_slave(struct i2c_client *slave)
+ 
+ static const struct i2c_algorithm cdns_i2c_algo = {
+ 	.master_xfer	= cdns_i2c_master_xfer,
++	.master_xfer_atomic = cdns_i2c_master_xfer_atomic,
+ 	.functionality	= cdns_i2c_func,
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
+ 	.reg_slave	= cdns_reg_slave,
+@@ -1158,23 +1401,6 @@ static int cdns_i2c_clk_notifier_cb(struct notifier_block *nb, unsigned long
+ 	}
+ }
+ 
+-/**
+- * cdns_i2c_runtime_suspend -  Runtime suspend method for the driver
+- * @dev:	Address of the platform_device structure
+- *
+- * Put the driver into low power mode.
+- *
+- * Return: 0 always
+- */
+-static int __maybe_unused cdns_i2c_runtime_suspend(struct device *dev)
+-{
+-	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+-
+-	clk_disable(xi2c->clk);
+-
+-	return 0;
+-}
+-
+ static int __maybe_unused cdns_i2c_suspend(struct device *dev)
+ {
+ 	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+@@ -1187,49 +1413,6 @@ static int __maybe_unused cdns_i2c_suspend(struct device *dev)
+ 	return 0;
+ }
+ 
+-/**
+- * cdns_i2c_init -  Controller initialisation
+- * @id:		Device private data structure
+- *
+- * Initialise the i2c controller.
+- *
+- */
+-static void cdns_i2c_init(struct cdns_i2c *id)
+-{
+-	cdns_i2c_writereg(id->ctrl_reg, CDNS_I2C_CR_OFFSET);
+-	/*
+-	 * Cadence I2C controller has a bug wherein it generates
+-	 * invalid read transaction after HW timeout in master receiver mode.
+-	 * HW timeout is not used by this driver and the interrupt is disabled.
+-	 * But the feature itself cannot be disabled. Hence maximum value
+-	 * is written to this register to reduce the chances of error.
+-	 */
+-	cdns_i2c_writereg(CDNS_I2C_TIMEOUT_MAX, CDNS_I2C_TIME_OUT_OFFSET);
+-}
+-
+-/**
+- * cdns_i2c_runtime_resume - Runtime resume
+- * @dev:	Address of the platform_device structure
+- *
+- * Runtime resume callback.
+- *
+- * Return: 0 on success and error value on error
+- */
+-static int __maybe_unused cdns_i2c_runtime_resume(struct device *dev)
+-{
+-	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+-	int ret;
+-
+-	ret = clk_enable(xi2c->clk);
+-	if (ret) {
+-		dev_err(dev, "Cannot enable clock.\n");
+-		return ret;
+-	}
+-	cdns_i2c_init(xi2c);
+-
+-	return 0;
+-}
+-
+ static int __maybe_unused cdns_i2c_resume(struct device *dev)
+ {
+ 	struct cdns_i2c *xi2c = dev_get_drvdata(dev);
+diff --git a/drivers/i2c/busses/i2c-xiic.c b/drivers/i2c/busses/i2c-xiic.c
+index 1d6817724..b142380ed 100644
+--- a/drivers/i2c/busses/i2c-xiic.c
++++ b/drivers/i2c/busses/i2c-xiic.c
+@@ -30,6 +30,8 @@
+ #include <linux/of.h>
+ #include <linux/clk.h>
+ #include <linux/pm_runtime.h>
++#include <linux/iopoll.h>
++#include <linux/spinlock.h>
+ 
+ #define DRIVER_NAME "xiic-i2c"
+ #define DYNAMIC_MODE_READ_BROKEN_BIT	BIT(0)
+@@ -74,6 +76,9 @@ enum i2c_scl_freq {
+  * @smbus_block_read: Flag to handle block read
+  * @input_clk: Input clock to I2C controller
+  * @i2c_clk: I2C SCL frequency
++ * @atomic: Mode of transfer
++ * @atomic_lock: Lock for atomic transfer mode
++ * @atomic_xfer_state: See STATE_
+  */
+ struct xiic_i2c {
+ 	struct device *dev;
+@@ -96,6 +101,9 @@ struct xiic_i2c {
+ 	bool smbus_block_read;
+ 	unsigned long input_clk;
+ 	unsigned int i2c_clk;
++	bool atomic;
++	spinlock_t atomic_lock;		/* Lock for atomic transfer mode */
++	enum xilinx_i2c_state atomic_xfer_state;
+ };
+ 
+ struct xiic_version_data {
+@@ -224,6 +232,8 @@ static const struct timing_regs timing_reg_values[] = {
+ #define XIIC_I2C_TIMEOUT	(msecs_to_jiffies(1000))
+ /* timeout waiting for the controller finish transfers */
+ #define XIIC_XFER_TIMEOUT	(msecs_to_jiffies(10000))
++/* timeout waiting for the controller finish transfers in micro seconds */
++#define XIIC_XFER_TIMEOUT_US	10000000
+ 
+ /*
+  * The following constant is used for the device global interrupt enable
+@@ -238,6 +248,29 @@ static const struct timing_regs timing_reg_values[] = {
+ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num);
+ static void __xiic_start_xfer(struct xiic_i2c *i2c);
+ 
++static int xiic_i2c_runtime_suspend(struct device *dev)
++{
++	struct xiic_i2c *i2c = dev_get_drvdata(dev);
++
++	clk_disable(i2c->clk);
++
++	return 0;
++}
++
++static int xiic_i2c_runtime_resume(struct device *dev)
++{
++	struct xiic_i2c *i2c = dev_get_drvdata(dev);
++	int ret;
++
++	ret = clk_enable(i2c->clk);
++	if (ret) {
++		dev_err(dev, "Cannot enable clock.\n");
++		return ret;
++	}
++
++	return 0;
++}
++
+ /*
+  * For the register read and write functions, a little-endian and big-endian
+  * version are necessary. Endianness is detected during the probe function.
+@@ -374,9 +407,10 @@ static int xiic_setclk(struct xiic_i2c *i2c)
+ 	unsigned int index = 0;
+ 	u32 reg_val;
+ 
+-	dev_dbg(i2c->adap.dev.parent,
+-		"%s entry, i2c->input_clk: %ld, i2c->i2c_clk: %d\n",
+-		__func__, i2c->input_clk, i2c->i2c_clk);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent,
++			"%s entry, i2c->input_clk: %ld, i2c->i2c_clk: %d\n",
++			__func__, i2c->input_clk, i2c->i2c_clk);
+ 
+ 	/* If not specified in DT, do not configure in SW. Rely only on Vivado design */
+ 	if (!i2c->i2c_clk || !i2c->input_clk)
+@@ -467,7 +501,8 @@ static int xiic_reinit(struct xiic_i2c *i2c)
+ 		return ret;
+ 
+ 	/* Enable interrupts */
+-	xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	if (!i2c->atomic)
++		xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
+ 
+ 	xiic_irq_clr_en(i2c, XIIC_INTR_ARB_LOST_MASK);
+ 
+@@ -549,11 +584,12 @@ static void xiic_read_rx(struct xiic_i2c *i2c)
+ 
+ 	bytes_in_fifo = xiic_getreg8(i2c, XIIC_RFO_REG_OFFSET) + 1;
+ 
+-	dev_dbg(i2c->adap.dev.parent,
+-		"%s entry, bytes in fifo: %d, rem: %d, SR: 0x%x, CR: 0x%x\n",
+-		__func__, bytes_in_fifo, xiic_rx_space(i2c),
+-		xiic_getreg8(i2c, XIIC_SR_REG_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent,
++			"%s entry, bytes in fifo: %d, rem: %d, SR: 0x%x, CR: 0x%x\n",
++			__func__, bytes_in_fifo, xiic_rx_space(i2c),
++			xiic_getreg8(i2c, XIIC_SR_REG_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 
+ 	if (bytes_in_fifo > xiic_rx_space(i2c))
+ 		bytes_in_fifo = xiic_rx_space(i2c);
+@@ -612,6 +648,26 @@ static void xiic_read_rx(struct xiic_i2c *i2c)
+ 	}
+ }
+ 
++static bool xiic_error_check(struct xiic_i2c *i2c)
++{
++	bool status = false;
++	u32 pend, isr, ier;
++
++	isr = xiic_getreg32(i2c, XIIC_IISR_OFFSET);
++	ier = xiic_getreg32(i2c, XIIC_IIER_OFFSET);
++	pend = isr & ier;
++
++	if ((pend & XIIC_INTR_ARB_LOST_MASK) ||
++	    ((pend & XIIC_INTR_TX_ERROR_MASK) &&
++	    !(pend & XIIC_INTR_RX_FULL_MASK))) {
++		xiic_reinit(i2c);
++		status = true;
++		if (i2c->tx_msg || i2c->rx_msg)
++			i2c->atomic_xfer_state = STATE_ERROR;
++	}
++	return status;
++}
++
+ static int xiic_tx_fifo_space(struct xiic_i2c *i2c)
+ {
+ 	/* return the actual space left in the FIFO */
+@@ -625,8 +681,9 @@ static void xiic_fill_tx_fifo(struct xiic_i2c *i2c)
+ 
+ 	len = (len > fifo_space) ? fifo_space : len;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, len: %d, fifo space: %d\n",
+-		__func__, len, fifo_space);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, len: %d, fifo space: %d\n",
++			__func__, len, fifo_space);
+ 
+ 	while (len--) {
+ 		u16 data = i2c->tx_msg->buf[i2c->tx_pos++];
+@@ -649,9 +706,13 @@ static void xiic_fill_tx_fifo(struct xiic_i2c *i2c)
+ 				xiic_setreg8(i2c, XIIC_CR_REG_OFFSET, cr &
+ 					     ~XIIC_CR_MSMS_MASK);
+ 			}
+-			dev_dbg(i2c->adap.dev.parent, "%s TX STOP\n", __func__);
++			if (!i2c->atomic)
++				dev_dbg(i2c->adap.dev.parent, "%s TX STOP\n", __func__);
+ 		}
+ 		xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
++
++		if (i2c->atomic && xiic_error_check(i2c))
++			return;
+ 	}
+ }
+ 
+@@ -854,22 +915,51 @@ static int xiic_wait_not_busy(struct xiic_i2c *i2c)
+ 	 */
+ 	err = xiic_bus_busy(i2c);
+ 	while (err && tries--) {
+-		msleep(1);
++		if (i2c->atomic)
++			udelay(1000);
++		else
++			usleep_range(1000, 1100);
+ 		err = xiic_bus_busy(i2c);
+ 	}
+ 
+ 	return err;
+ }
+ 
++static void xiic_recv_atomic(struct xiic_i2c *i2c)
++{
++	while (xiic_rx_space(i2c)) {
++		if (xiic_getreg32(i2c, XIIC_IISR_OFFSET) & XIIC_INTR_RX_FULL_MASK) {
++			xiic_read_rx(i2c);
++
++			/* Clear Rx full and Tx error interrupts. */
++			xiic_irq_clr_en(i2c, XIIC_INTR_RX_FULL_MASK |
++					XIIC_INTR_TX_ERROR_MASK);
++		}
++		if (xiic_error_check(i2c))
++			return;
++	}
++
++	i2c->rx_msg = NULL;
++	xiic_irq_clr_en(i2c, XIIC_INTR_TX_ERROR_MASK);
++
++	/* send next message if this wasn't the last. */
++	if (i2c->nmsgs > 1) {
++		i2c->nmsgs--;
++		i2c->tx_msg++;
++		__xiic_start_xfer(i2c);
++	}
++}
++
+ static void xiic_start_recv(struct xiic_i2c *i2c)
+ {
+ 	u16 rx_watermark;
+ 	u8 cr = 0, rfd_set = 0;
+ 	struct i2c_msg *msg = i2c->rx_msg = i2c->tx_msg;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
+-		__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
++			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 
+ 	/* Disable Tx interrupts */
+ 	xiic_irq_dis(i2c, XIIC_INTR_TX_HALF_MASK | XIIC_INTR_TX_EMPTY_MASK);
+@@ -967,9 +1057,10 @@ static void xiic_start_recv(struct xiic_i2c *i2c)
+ 					XIIC_CR_MSMS_MASK)
+ 					& ~(XIIC_CR_DIR_IS_TX_MASK));
+ 		}
+-		dev_dbg(i2c->adap.dev.parent, "%s end, ISR: 0x%x, CR: 0x%x\n",
+-			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++		if (!i2c->atomic)
++			dev_dbg(i2c->adap.dev.parent, "%s end, ISR: 0x%x, CR: 0x%x\n",
++				__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++				xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
+ 	}
+ 
+ 	if (i2c->nmsgs == 1)
+@@ -979,10 +1070,55 @@ static void xiic_start_recv(struct xiic_i2c *i2c)
+ 	/* the message is tx:ed */
+ 	i2c->tx_pos = msg->len;
+ 
++	i2c->prev_msg_tx = false;
++
+ 	/* Enable interrupts */
+-	xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	if (!i2c->atomic)
++		xiic_setreg32(i2c, XIIC_DGIER_OFFSET, XIIC_GINTR_ENABLE_MASK);
++	else
++		xiic_recv_atomic(i2c);
++}
+ 
+-	i2c->prev_msg_tx = false;
++static void xiic_send_rem_atomic(struct xiic_i2c *i2c)
++{
++	while (xiic_tx_space(i2c)) {
++		if (xiic_tx_fifo_space(i2c)) {
++			u16 data;
++
++			data = i2c->tx_msg->buf[i2c->tx_pos];
++			i2c->tx_pos++;
++			if (!xiic_tx_space(i2c) && i2c->nmsgs == 1) {
++				/* last message in transfer -> STOP */
++				if (i2c->dynamic) {
++					data |= XIIC_TX_DYN_STOP_MASK;
++				} else {
++					u8 cr;
++					int status;
++
++					/* Wait till FIFO is empty so STOP is sent last */
++					status = xiic_wait_tx_empty(i2c);
++					if (status)
++						return;
++
++					/* Write to CR to stop */
++					cr = xiic_getreg8(i2c, XIIC_CR_REG_OFFSET);
++					xiic_setreg8(i2c, XIIC_CR_REG_OFFSET, cr &
++						     ~XIIC_CR_MSMS_MASK);
++				}
++			}
++			xiic_setreg16(i2c, XIIC_DTR_REG_OFFSET, data);
++		}
++		if (xiic_error_check(i2c))
++			return;
++	}
++
++	if (i2c->nmsgs > 1) {
++		i2c->nmsgs--;
++		i2c->tx_msg++;
++		__xiic_start_xfer(i2c);
++	} else {
++		xiic_irq_dis(i2c, XIIC_INTR_TX_HALF_MASK);
++	}
+ }
+ 
+ static void xiic_start_send(struct xiic_i2c *i2c)
+@@ -991,11 +1127,13 @@ static void xiic_start_send(struct xiic_i2c *i2c)
+ 	u16 data;
+ 	struct i2c_msg *msg = i2c->tx_msg;
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, len: %d",
+-		__func__, msg, msg->len);
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
+-		__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
+-		xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	if (!i2c->atomic) {
++		dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, len: %d",
++			__func__, msg, msg->len);
++		dev_dbg(i2c->adap.dev.parent, "%s entry, ISR: 0x%x, CR: 0x%x\n",
++			__func__, xiic_getreg32(i2c, XIIC_IISR_OFFSET),
++			xiic_getreg8(i2c, XIIC_CR_REG_OFFSET));
++	}
+ 
+ 	if (i2c->dynamic) {
+ 		/* write the address */
+@@ -1060,19 +1198,27 @@ static void xiic_start_send(struct xiic_i2c *i2c)
+ 				XIIC_INTR_TX_ERROR_MASK |
+ 				XIIC_INTR_BNB_MASK);
+ 	}
++
+ 	i2c->prev_msg_tx = true;
++
++	if (i2c->atomic && !i2c->atomic_xfer_state)
++		xiic_send_rem_atomic(i2c);
+ }
+ 
+ static void __xiic_start_xfer(struct xiic_i2c *i2c)
+ {
+ 	int fifo_space = xiic_tx_fifo_space(i2c);
+ 
+-	dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, fifos space: %d\n",
+-		__func__, i2c->tx_msg, fifo_space);
++	if (!i2c->atomic)
++		dev_dbg(i2c->adap.dev.parent, "%s entry, msg: %p, fifos space: %d\n",
++			__func__, i2c->tx_msg, fifo_space);
+ 
+ 	if (!i2c->tx_msg)
+ 		return;
+ 
++	if (i2c->atomic && xiic_error_check(i2c))
++		return;
++
+ 	i2c->rx_pos = 0;
+ 	i2c->tx_pos = 0;
+ 	i2c->state = STATE_START;
+@@ -1089,7 +1235,10 @@ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num)
+ 	bool broken_read, max_read_len, smbus_blk_read;
+ 	int ret, count;
+ 
+-	mutex_lock(&i2c->lock);
++	if (i2c->atomic)
++		spin_lock(&i2c->atomic_lock);
++	else
++		mutex_lock(&i2c->lock);
+ 
+ 	if (i2c->tx_msg || i2c->rx_msg) {
+ 		dev_err(i2c->adap.dev.parent,
+@@ -1098,6 +1247,8 @@ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num)
+ 		goto out;
+ 	}
+ 
++	i2c->atomic_xfer_state = STATE_DONE;
++
+ 	/* In single master mode bus can only be busy, when in use by this
+ 	 * driver. If the register indicates bus being busy for some reason we
+ 	 * should ignore it, since bus will never be released and i2c will be
+@@ -1124,7 +1275,9 @@ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num)
+ 	i2c->tx_msg = msgs;
+ 	i2c->rx_msg = NULL;
+ 	i2c->nmsgs = num;
+-	init_completion(&i2c->completion);
++
++	if (!i2c->atomic)
++		init_completion(&i2c->completion);
+ 
+ 	/* Decide standard mode or Dynamic mode */
+ 	i2c->dynamic = true;
+@@ -1159,7 +1312,10 @@ static int xiic_start_xfer(struct xiic_i2c *i2c, struct i2c_msg *msgs, int num)
+ 		__xiic_start_xfer(i2c);
+ 
+ out:
+-	mutex_unlock(&i2c->lock);
++	if (i2c->atomic)
++		spin_unlock(&i2c->atomic_lock);
++	else
++		mutex_unlock(&i2c->lock);
+ 
+ 	return ret;
+ }
+@@ -1198,6 +1354,44 @@ static int xiic_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
+ 	return err;
+ }
+ 
++static int xiic_xfer_atomic(struct i2c_adapter *adap, struct i2c_msg *msgs, int num)
++{
++	struct xiic_i2c *i2c = i2c_get_adapdata(adap);
++	u32 status_reg;
++	int err;
++
++	err = xiic_i2c_runtime_resume(i2c->dev);
++	if (err)
++		return err;
++
++	i2c->atomic = true;
++	err = xiic_start_xfer(i2c, msgs, num);
++	if (err < 0)
++		return err;
++
++	err = readl_poll_timeout_atomic(i2c->base + XIIC_SR_REG_OFFSET,
++					status_reg, !(status_reg & XIIC_SR_BUS_BUSY_MASK),
++					1, XIIC_XFER_TIMEOUT_US);
++
++	if (err) /* Timeout */
++		err = -ETIMEDOUT;
++
++	spin_lock(&i2c->atomic_lock);
++	if (err || i2c->state) {
++		i2c->tx_msg = NULL;
++		i2c->rx_msg = NULL;
++		i2c->nmsgs = 0;
++	}
++
++	err = (i2c->atomic_xfer_state == STATE_DONE) ? num : -EIO;
++	spin_unlock(&i2c->atomic_lock);
++
++	i2c->atomic = false;
++	xiic_i2c_runtime_suspend(i2c->dev);
++
++	return err;
++}
++
+ static u32 xiic_func(struct i2c_adapter *adap)
+ {
+ 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_SMBUS_BLOCK_DATA;
+@@ -1205,6 +1399,7 @@ static u32 xiic_func(struct i2c_adapter *adap)
+ 
+ static const struct i2c_algorithm xiic_algorithm = {
+ 	.master_xfer = xiic_xfer,
++	.master_xfer_atomic = xiic_xfer_atomic,
+ 	.functionality = xiic_func,
+ };
+ 
+@@ -1268,6 +1463,7 @@ static int xiic_i2c_probe(struct platform_device *pdev)
+ 		 DRIVER_NAME " %s", pdev->name);
+ 
+ 	mutex_init(&i2c->lock);
++	spin_lock_init(&i2c->atomic_lock);
+ 
+ 	i2c->clk = devm_clk_get_enabled(&pdev->dev, NULL);
+ 	if (IS_ERR(i2c->clk))
+@@ -1365,29 +1561,6 @@ static void xiic_i2c_remove(struct platform_device *pdev)
+ 	pm_runtime_dont_use_autosuspend(&pdev->dev);
+ }
+ 
+-static int __maybe_unused xiic_i2c_runtime_suspend(struct device *dev)
+-{
+-	struct xiic_i2c *i2c = dev_get_drvdata(dev);
+-
+-	clk_disable(i2c->clk);
+-
+-	return 0;
+-}
+-
+-static int __maybe_unused xiic_i2c_runtime_resume(struct device *dev)
+-{
+-	struct xiic_i2c *i2c = dev_get_drvdata(dev);
+-	int ret;
+-
+-	ret = clk_enable(i2c->clk);
+-	if (ret) {
+-		dev_err(dev, "Cannot enable clock.\n");
+-		return ret;
+-	}
+-
+-	return 0;
+-}
+-
+ static const struct dev_pm_ops xiic_dev_pm_ops = {
+ 	SET_RUNTIME_PM_OPS(xiic_i2c_runtime_suspend,
+ 			   xiic_i2c_runtime_resume, NULL)
+diff --git a/drivers/i2c/i2c-atr.c b/drivers/i2c/i2c-atr.c
+index 5342e934a..38caa72aa 100644
+--- a/drivers/i2c/i2c-atr.c
++++ b/drivers/i2c/i2c-atr.c
+@@ -16,32 +16,65 @@
+ #include <linux/property.h>
+ #include <linux/slab.h>
+ #include <linux/spinlock.h>
++#include <linux/lockdep.h>
+ 
+ #define ATR_MAX_ADAPTERS 100	/* Just a sanity limit */
+ #define ATR_MAX_SYMLINK_LEN 11	/* Longest name is 10 chars: "channel-99" */
+ 
+ /**
+- * struct i2c_atr_alias_pair - Holds the alias assigned to a client.
++ * struct i2c_atr_alias_pair - Holds the alias assigned to a client address.
+  * @node:   List node
+- * @client: Pointer to the client on the child bus
++ * @addr:   Address of the client on the child bus.
+  * @alias:  I2C alias address assigned by the driver.
+  *          This is the address that will be used to issue I2C transactions
+  *          on the parent (physical) bus.
++ * @fixed:  Alias pair cannot be replaced during dynamic address attachment.
++ *          This flag is necessary for situations where a single I2C transaction
++ *          contains more distinct target addresses than the ATR channel can handle.
++ *          It marks addresses that have already been attached to an alias so
++ *          that their alias pair is not evicted by a subsequent address in the same
++ *          transaction.
++ *
+  */
+ struct i2c_atr_alias_pair {
+ 	struct list_head node;
+-	const struct i2c_client *client;
++	bool fixed;
++	u16 addr;
+ 	u16 alias;
+ };
+ 
++/**
++ * struct i2c_atr_alias_pool - Pool of client aliases available for an ATR.
++ * @size:     Total number of aliases
++ * @shared:   Indicates if this alias pool is shared by multiple channels
++ *
++ * @lock:     Lock protecting @aliases and @use_mask
++ * @aliases:  Array of aliases, must hold exactly @size elements
++ * @use_mask: Mask of used aliases
++ */
++struct i2c_atr_alias_pool {
++	size_t size;
++	bool shared;
++
++	/* Protects aliases and use_mask */
++	spinlock_t lock;
++	u16 *aliases;
++	unsigned long *use_mask;
++};
++
+ /**
+  * struct i2c_atr_chan - Data for a channel.
+  * @adap:            The &struct i2c_adapter for the channel
+  * @atr:             The parent I2C ATR
+  * @chan_id:         The ID of this channel
+- * @alias_list:      List of @struct i2c_atr_alias_pair containing the
++ * @alias_pairs_lock: Mutex protecting @alias_pairs
++ * @alias_pairs_lock_key: Lock key for @alias_pairs_lock
++ * @alias_pairs:     List of @struct i2c_atr_alias_pair containing the
+  *                   assigned aliases
++ * @alias_pool:      Pool of available client aliases
++ *
+  * @orig_addrs_lock: Mutex protecting @orig_addrs
++ * @orig_addrs_lock_key: Lock key for @orig_addrs_lock
+  * @orig_addrs:      Buffer used to store the original addresses during transmit
+  * @orig_addrs_size: Size of @orig_addrs
+  */
+@@ -50,10 +83,15 @@ struct i2c_atr_chan {
+ 	struct i2c_atr *atr;
+ 	u32 chan_id;
+ 
+-	struct list_head alias_list;
++	/* Lock alias_pairs during attach/detach */
++	struct mutex alias_pairs_lock;
++	struct lock_class_key alias_pairs_lock_key;
++	struct list_head alias_pairs;
++	struct i2c_atr_alias_pool *alias_pool;
+ 
+ 	/* Lock orig_addrs during xfer */
+ 	struct mutex orig_addrs_lock;
++	struct lock_class_key orig_addrs_lock_key;
+ 	u16 *orig_addrs;
+ 	unsigned int orig_addrs_size;
+ };
+@@ -66,11 +104,10 @@ struct i2c_atr_chan {
+  * @priv:      Private driver data, set with i2c_atr_set_driver_data()
+  * @algo:      The &struct i2c_algorithm for adapters
+  * @lock:      Lock for the I2C bus segment (see &struct i2c_lock_operations)
++ * @lock_key:  Lock key for @lock
+  * @max_adapters: Maximum number of adapters this I2C ATR can have
+- * @num_aliases: Number of aliases in the aliases array
+- * @aliases:   The aliases array
+- * @alias_mask_lock: Lock protecting alias_use_mask
+- * @alias_use_mask: Bitmask for used aliases in aliases array
++ * @flags:     Flags for ATR
++ * @alias_pool: Optional common pool of available client aliases
+  * @i2c_nb:    Notifier for remote client add & del events
+  * @adapter:   Array of adapters
+  */
+@@ -84,27 +121,135 @@ struct i2c_atr {
+ 	struct i2c_algorithm algo;
+ 	/* lock for the I2C bus segment (see struct i2c_lock_operations) */
+ 	struct mutex lock;
++	struct lock_class_key lock_key;
+ 	int max_adapters;
++	u32 flags;
+ 
+-	size_t num_aliases;
+-	const u16 *aliases;
+-	/* Protects alias_use_mask */
+-	spinlock_t alias_mask_lock;
+-	unsigned long *alias_use_mask;
++	struct i2c_atr_alias_pool *alias_pool;
+ 
+ 	struct notifier_block i2c_nb;
+ 
+ 	struct i2c_adapter *adapter[] __counted_by(max_adapters);
+ };
+ 
++static struct i2c_atr_alias_pool *i2c_atr_alloc_alias_pool(size_t num_aliases, bool shared)
++{
++	struct i2c_atr_alias_pool *alias_pool;
++	int ret;
++
++	alias_pool = kzalloc(sizeof(*alias_pool), GFP_KERNEL);
++	if (!alias_pool)
++		return ERR_PTR(-ENOMEM);
++
++	alias_pool->size = num_aliases;
++
++	alias_pool->aliases = kcalloc(num_aliases, sizeof(*alias_pool->aliases), GFP_KERNEL);
++	if (!alias_pool->aliases) {
++		ret = -ENOMEM;
++		goto err_free_alias_pool;
++	}
++
++	alias_pool->use_mask = bitmap_zalloc(num_aliases, GFP_KERNEL);
++	if (!alias_pool->use_mask) {
++		ret = -ENOMEM;
++		goto err_free_aliases;
++	}
++
++	alias_pool->shared = shared;
++
++	spin_lock_init(&alias_pool->lock);
++
++	return alias_pool;
++
++err_free_aliases:
++	kfree(alias_pool->aliases);
++err_free_alias_pool:
++	kfree(alias_pool);
++	return ERR_PTR(ret);
++}
++
++static void i2c_atr_free_alias_pool(struct i2c_atr_alias_pool *alias_pool)
++{
++	bitmap_free(alias_pool->use_mask);
++	kfree(alias_pool->aliases);
++	kfree(alias_pool);
++}
++
++/* Must be called with alias_pairs_lock held */
++static struct i2c_atr_alias_pair *i2c_atr_create_c2a(struct i2c_atr_chan *chan,
++						     u16 alias, u16 addr)
++{
++	struct i2c_atr_alias_pair *c2a;
++
++	lockdep_assert_held(&chan->alias_pairs_lock);
++
++	c2a = kzalloc(sizeof(*c2a), GFP_KERNEL);
++	if (!c2a)
++		return NULL;
++
++	c2a->addr = addr;
++	c2a->alias = alias;
++
++	list_add(&c2a->node, &chan->alias_pairs);
++
++	return c2a;
++}
++
++/* Must be called with alias_pairs_lock held */
++static void i2c_atr_destroy_c2a(struct i2c_atr_alias_pair **pc2a)
++{
++	list_del(&(*pc2a)->node);
++	kfree(*pc2a);
++	*pc2a = NULL;
++}
++
++static int i2c_atr_reserve_alias(struct i2c_atr_alias_pool *alias_pool)
++{
++	unsigned long idx;
++	u16 alias;
++
++	spin_lock(&alias_pool->lock);
++
++	idx = find_first_zero_bit(alias_pool->use_mask, alias_pool->size);
++	if (idx >= alias_pool->size) {
++		spin_unlock(&alias_pool->lock);
++		return -EBUSY;
++	}
++
++	set_bit(idx, alias_pool->use_mask);
++
++	alias = alias_pool->aliases[idx];
++
++	spin_unlock(&alias_pool->lock);
++	return alias;
++}
++
++static void i2c_atr_release_alias(struct i2c_atr_alias_pool *alias_pool, u16 alias)
++{
++	unsigned int idx;
++
++	spin_lock(&alias_pool->lock);
++
++	for (idx = 0; idx < alias_pool->size; ++idx) {
++		if (alias_pool->aliases[idx] == alias) {
++			clear_bit(idx, alias_pool->use_mask);
++			spin_unlock(&alias_pool->lock);
++			return;
++		}
++	}
++
++	spin_unlock(&alias_pool->lock);
++}
++
+ static struct i2c_atr_alias_pair *
+-i2c_atr_find_mapping_by_client(const struct list_head *list,
+-			       const struct i2c_client *client)
++i2c_atr_find_mapping_by_addr(struct i2c_atr_chan *chan, u16 addr)
+ {
+ 	struct i2c_atr_alias_pair *c2a;
+ 
+-	list_for_each_entry(c2a, list, node) {
+-		if (c2a->client == client)
++	lockdep_assert_held(&chan->alias_pairs_lock);
++
++	list_for_each_entry(c2a, &chan->alias_pairs, node) {
++		if (c2a->addr == addr)
+ 			return c2a;
+ 	}
+ 
+@@ -112,18 +257,107 @@ i2c_atr_find_mapping_by_client(const struct list_head *list,
+ }
+ 
+ static struct i2c_atr_alias_pair *
+-i2c_atr_find_mapping_by_addr(const struct list_head *list, u16 phys_addr)
++i2c_atr_create_mapping_by_addr(struct i2c_atr_chan *chan, u16 addr)
+ {
++	struct i2c_atr *atr = chan->atr;
+ 	struct i2c_atr_alias_pair *c2a;
++	u16 alias;
++	int ret;
+ 
+-	list_for_each_entry(c2a, list, node) {
+-		if (c2a->client->addr == phys_addr)
+-			return c2a;
++	lockdep_assert_held(&chan->alias_pairs_lock);
++
++	ret = i2c_atr_reserve_alias(chan->alias_pool);
++	if (ret < 0)
++		return NULL;
++
++	alias = ret;
++
++	c2a = i2c_atr_create_c2a(chan, alias, addr);
++	if (!c2a)
++		goto err_release_alias;
++
++	ret = atr->ops->attach_addr(atr, chan->chan_id, c2a->addr, c2a->alias);
++	if (ret) {
++		dev_err(atr->dev, "failed to attach 0x%02x on channel %d: err %d\n",
++			addr, chan->chan_id, ret);
++		goto err_del_c2a;
+ 	}
+ 
++	return c2a;
++
++err_del_c2a:
++	i2c_atr_destroy_c2a(&c2a);
++err_release_alias:
++	i2c_atr_release_alias(chan->alias_pool, alias);
+ 	return NULL;
+ }
+ 
++static struct i2c_atr_alias_pair *
++i2c_atr_replace_mapping_by_addr(struct i2c_atr_chan *chan, u16 addr)
++{
++	struct i2c_atr *atr = chan->atr;
++	struct i2c_atr_alias_pair *c2a;
++	struct list_head *alias_pairs;
++	bool found = false;
++	u16 alias;
++	int ret;
++
++	lockdep_assert_held(&chan->alias_pairs_lock);
++
++	alias_pairs = &chan->alias_pairs;
++
++	if (unlikely(list_empty(alias_pairs)))
++		return NULL;
++
++	list_for_each_entry_reverse(c2a, alias_pairs, node) {
++		if (!c2a->fixed) {
++			found = true;
++			break;
++		}
++	}
++
++	if (!found)
++		return NULL;
++
++	atr->ops->detach_addr(atr, chan->chan_id, c2a->addr);
++	c2a->addr = addr;
++
++	list_move(&c2a->node, alias_pairs);
++
++	alias = c2a->alias;
++
++	ret = atr->ops->attach_addr(atr, chan->chan_id, c2a->addr, c2a->alias);
++	if (ret) {
++		dev_err(atr->dev, "failed to attach 0x%02x on channel %d: err %d\n",
++			addr, chan->chan_id, ret);
++		i2c_atr_destroy_c2a(&c2a);
++		i2c_atr_release_alias(chan->alias_pool, alias);
++		return NULL;
++	}
++
++	return c2a;
++}
++
++static struct i2c_atr_alias_pair *
++i2c_atr_get_mapping_by_addr(struct i2c_atr_chan *chan, u16 addr)
++{
++	struct i2c_atr *atr = chan->atr;
++	struct i2c_atr_alias_pair *c2a;
++
++	c2a = i2c_atr_find_mapping_by_addr(chan, addr);
++	if (c2a)
++		return c2a;
++
++	if (atr->flags & I2C_ATR_F_STATIC)
++		return NULL;
++
++	c2a = i2c_atr_create_mapping_by_addr(chan, addr);
++	if (c2a)
++		return c2a;
++
++	return i2c_atr_replace_mapping_by_addr(chan, addr);
++}
++
+ /*
+  * Replace all message addresses with their aliases, saving the original
+  * addresses.
+@@ -136,7 +370,7 @@ static int i2c_atr_map_msgs(struct i2c_atr_chan *chan, struct i2c_msg *msgs,
+ {
+ 	struct i2c_atr *atr = chan->atr;
+ 	static struct i2c_atr_alias_pair *c2a;
+-	int i;
++	int i, ret = 0;
+ 
+ 	/* Ensure we have enough room to save the original addresses */
+ 	if (unlikely(chan->orig_addrs_size < num)) {
+@@ -152,25 +386,36 @@ static int i2c_atr_map_msgs(struct i2c_atr_chan *chan, struct i2c_msg *msgs,
+ 		chan->orig_addrs_size = num;
+ 	}
+ 
++	mutex_lock(&chan->alias_pairs_lock);
++
+ 	for (i = 0; i < num; i++) {
+ 		chan->orig_addrs[i] = msgs[i].addr;
+ 
+-		c2a = i2c_atr_find_mapping_by_addr(&chan->alias_list,
+-						   msgs[i].addr);
++		c2a = i2c_atr_get_mapping_by_addr(chan, msgs[i].addr);
++
+ 		if (!c2a) {
++			if (atr->flags & I2C_ATR_F_PASSTHROUGH)
++				continue;
++
+ 			dev_err(atr->dev, "client 0x%02x not mapped!\n",
+ 				msgs[i].addr);
+ 
+ 			while (i--)
+ 				msgs[i].addr = chan->orig_addrs[i];
+ 
+-			return -ENXIO;
++			ret = -ENXIO;
++			goto out_unlock;
+ 		}
+ 
++		// Prevent c2a from being overwritten by another client in this transaction
++		c2a->fixed = true;
++
+ 		msgs[i].addr = c2a->alias;
+ 	}
+ 
+-	return 0;
++out_unlock:
++	mutex_unlock(&chan->alias_pairs_lock);
++	return ret;
+ }
+ 
+ /*
+@@ -183,10 +428,24 @@ static int i2c_atr_map_msgs(struct i2c_atr_chan *chan, struct i2c_msg *msgs,
+ static void i2c_atr_unmap_msgs(struct i2c_atr_chan *chan, struct i2c_msg *msgs,
+ 			       int num)
+ {
++	struct i2c_atr_alias_pair *c2a;
+ 	int i;
+ 
+ 	for (i = 0; i < num; i++)
+ 		msgs[i].addr = chan->orig_addrs[i];
++
++	mutex_lock(&chan->alias_pairs_lock);
++
++	if (unlikely(list_empty(&chan->alias_pairs)))
++		goto out_unlock;
++
++	// unfix c2a entries so that subsequent transfers can reuse their aliases
++	list_for_each_entry(c2a, &chan->alias_pairs, node) {
++		c2a->fixed = false;
++	}
++
++out_unlock:
++	mutex_unlock(&chan->alias_pairs_lock);
+ }
+ 
+ static int i2c_atr_master_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+@@ -224,14 +483,23 @@ static int i2c_atr_smbus_xfer(struct i2c_adapter *adap, u16 addr,
+ 	struct i2c_atr *atr = chan->atr;
+ 	struct i2c_adapter *parent = atr->parent;
+ 	struct i2c_atr_alias_pair *c2a;
++	u16 alias;
+ 
+-	c2a = i2c_atr_find_mapping_by_addr(&chan->alias_list, addr);
+-	if (!c2a) {
++	mutex_lock(&chan->alias_pairs_lock);
++
++	c2a = i2c_atr_get_mapping_by_addr(chan, addr);
++
++	if (!c2a && !(atr->flags & I2C_ATR_F_PASSTHROUGH)) {
+ 		dev_err(atr->dev, "client 0x%02x not mapped!\n", addr);
++		mutex_unlock(&chan->alias_pairs_lock);
+ 		return -ENXIO;
+ 	}
+ 
+-	return i2c_smbus_xfer(parent, c2a->alias, flags, read_write, command,
++	alias = c2a ? c2a->alias : addr;
++
++	mutex_unlock(&chan->alias_pairs_lock);
++
++	return i2c_smbus_xfer(parent, alias, flags, read_write, command,
+ 			      size, data);
+ }
+ 
+@@ -273,112 +541,60 @@ static const struct i2c_lock_operations i2c_atr_lock_ops = {
+ 	.unlock_bus =  i2c_atr_unlock_bus,
+ };
+ 
+-static int i2c_atr_reserve_alias(struct i2c_atr *atr)
+-{
+-	unsigned long idx;
+-
+-	spin_lock(&atr->alias_mask_lock);
+-
+-	idx = find_first_zero_bit(atr->alias_use_mask, atr->num_aliases);
+-	if (idx >= atr->num_aliases) {
+-		spin_unlock(&atr->alias_mask_lock);
+-		dev_err(atr->dev, "failed to find a free alias\n");
+-		return -EBUSY;
+-	}
+-
+-	set_bit(idx, atr->alias_use_mask);
+-
+-	spin_unlock(&atr->alias_mask_lock);
+-
+-	return atr->aliases[idx];
+-}
+-
+-static void i2c_atr_release_alias(struct i2c_atr *atr, u16 alias)
+-{
+-	unsigned int idx;
+-
+-	spin_lock(&atr->alias_mask_lock);
+-
+-	for (idx = 0; idx < atr->num_aliases; ++idx) {
+-		if (atr->aliases[idx] == alias) {
+-			clear_bit(idx, atr->alias_use_mask);
+-			spin_unlock(&atr->alias_mask_lock);
+-			return;
+-		}
+-	}
+-
+-	spin_unlock(&atr->alias_mask_lock);
+-
+-	 /* This should never happen */
+-	dev_warn(atr->dev, "Unable to find mapped alias\n");
+-}
+-
+-static int i2c_atr_attach_client(struct i2c_adapter *adapter,
+-				 const struct i2c_client *client)
++static int i2c_atr_attach_addr(struct i2c_adapter *adapter,
++			       u16 addr)
+ {
+ 	struct i2c_atr_chan *chan = adapter->algo_data;
+ 	struct i2c_atr *atr = chan->atr;
+ 	struct i2c_atr_alias_pair *c2a;
+-	u16 alias;
+-	int ret;
++	int ret = 0;
+ 
+-	ret = i2c_atr_reserve_alias(atr);
+-	if (ret < 0)
+-		return ret;
++	mutex_lock(&chan->alias_pairs_lock);
+ 
+-	alias = ret;
++	c2a = i2c_atr_create_mapping_by_addr(chan, addr);
++	if (!c2a && !(atr->flags & I2C_ATR_F_STATIC))
++		c2a = i2c_atr_replace_mapping_by_addr(chan, addr);
+ 
+-	c2a = kzalloc(sizeof(*c2a), GFP_KERNEL);
+ 	if (!c2a) {
+-		ret = -ENOMEM;
+-		goto err_release_alias;
++		dev_err(atr->dev, "failed to find a free alias\n");
++		ret = -EBUSY;
++		goto out_unlock;
+ 	}
+ 
+-	ret = atr->ops->attach_client(atr, chan->chan_id, client, alias);
+-	if (ret)
+-		goto err_free;
+-
+-	dev_dbg(atr->dev, "chan%u: client 0x%02x mapped at alias 0x%02x (%s)\n",
+-		chan->chan_id, client->addr, alias, client->name);
+-
+-	c2a->client = client;
+-	c2a->alias = alias;
+-	list_add(&c2a->node, &chan->alias_list);
+-
+-	return 0;
+-
+-err_free:
+-	kfree(c2a);
+-err_release_alias:
+-	i2c_atr_release_alias(atr, alias);
++	dev_dbg(atr->dev, "chan%u: using alias 0x%02x for addr 0x%02x\n",
++		chan->chan_id, c2a->alias, addr);
+ 
++out_unlock:
++	mutex_unlock(&chan->alias_pairs_lock);
+ 	return ret;
+ }
+ 
+-static void i2c_atr_detach_client(struct i2c_adapter *adapter,
+-				  const struct i2c_client *client)
++static void i2c_atr_detach_addr(struct i2c_adapter *adapter,
++				u16 addr)
+ {
+ 	struct i2c_atr_chan *chan = adapter->algo_data;
+ 	struct i2c_atr *atr = chan->atr;
+ 	struct i2c_atr_alias_pair *c2a;
+ 
+-	atr->ops->detach_client(atr, chan->chan_id, client);
++	atr->ops->detach_addr(atr, chan->chan_id, addr);
++
++	mutex_lock(&chan->alias_pairs_lock);
+ 
+-	c2a = i2c_atr_find_mapping_by_client(&chan->alias_list, client);
++	c2a = i2c_atr_find_mapping_by_addr(chan, addr);
+ 	if (!c2a) {
+-		 /* This should never happen */
+-		dev_warn(atr->dev, "Unable to find address mapping\n");
++		mutex_unlock(&chan->alias_pairs_lock);
+ 		return;
+ 	}
+ 
+-	i2c_atr_release_alias(atr, c2a->alias);
++	i2c_atr_release_alias(chan->alias_pool, c2a->alias);
+ 
+ 	dev_dbg(atr->dev,
+-		"chan%u: client 0x%02x unmapped from alias 0x%02x (%s)\n",
+-		chan->chan_id, client->addr, c2a->alias, client->name);
++		"chan%u: detached alias 0x%02x from addr 0x%02x\n",
++		chan->chan_id, c2a->alias, addr);
+ 
+-	list_del(&c2a->node);
+-	kfree(c2a);
++	i2c_atr_destroy_c2a(&c2a);
++
++	mutex_unlock(&chan->alias_pairs_lock);
+ }
+ 
+ static int i2c_atr_bus_notifier_call(struct notifier_block *nb,
+@@ -405,7 +621,7 @@ static int i2c_atr_bus_notifier_call(struct notifier_block *nb,
+ 
+ 	switch (event) {
+ 	case BUS_NOTIFY_ADD_DEVICE:
+-		ret = i2c_atr_attach_client(client->adapter, client);
++		ret = i2c_atr_attach_addr(client->adapter, client->addr);
+ 		if (ret)
+ 			dev_err(atr->dev,
+ 				"Failed to attach remote client '%s': %d\n",
+@@ -413,7 +629,7 @@ static int i2c_atr_bus_notifier_call(struct notifier_block *nb,
+ 		break;
+ 
+ 	case BUS_NOTIFY_REMOVED_DEVICE:
+-		i2c_atr_detach_client(client->adapter, client);
++		i2c_atr_detach_addr(client->adapter, client->addr);
+ 		break;
+ 
+ 	default:
+@@ -425,29 +641,43 @@ static int i2c_atr_bus_notifier_call(struct notifier_block *nb,
+ 
+ static int i2c_atr_parse_alias_pool(struct i2c_atr *atr)
+ {
++	struct i2c_atr_alias_pool *alias_pool;
+ 	struct device *dev = atr->dev;
+-	unsigned long *alias_use_mask;
+ 	size_t num_aliases;
+ 	unsigned int i;
+ 	u32 *aliases32;
+-	u16 *aliases16;
+ 	int ret;
+ 
+-	ret = fwnode_property_count_u32(dev_fwnode(dev), "i2c-alias-pool");
+-	if (ret < 0) {
+-		dev_err(dev, "Failed to count 'i2c-alias-pool' property: %d\n",
+-			ret);
++	if (!fwnode_property_present(dev_fwnode(dev), "i2c-alias-pool")) {
++		num_aliases = 0;
++	} else {
++		ret = fwnode_property_count_u32(dev_fwnode(dev), "i2c-alias-pool");
++		if (ret < 0) {
++			dev_err(dev, "Failed to count 'i2c-alias-pool' property: %d\n",
++				ret);
++			return ret;
++		}
++
++		num_aliases = ret;
++	}
++
++	alias_pool = i2c_atr_alloc_alias_pool(num_aliases, true);
++	if (IS_ERR(alias_pool)) {
++		ret = PTR_ERR(alias_pool);
++		dev_err(dev, "Failed to allocate alias pool, err %d\n", ret);
+ 		return ret;
+ 	}
+ 
+-	num_aliases = ret;
++	atr->alias_pool = alias_pool;
+ 
+-	if (!num_aliases)
++	if (!alias_pool->size)
+ 		return 0;
+ 
+ 	aliases32 = kcalloc(num_aliases, sizeof(*aliases32), GFP_KERNEL);
+-	if (!aliases32)
+-		return -ENOMEM;
++	if (!aliases32) {
++		ret = -ENOMEM;
++		goto err_free_alias_pool;
++	}
+ 
+ 	ret = fwnode_property_read_u32_array(dev_fwnode(dev), "i2c-alias-pool",
+ 					     aliases32, num_aliases);
+@@ -457,48 +687,33 @@ static int i2c_atr_parse_alias_pool(struct i2c_atr *atr)
+ 		goto err_free_aliases32;
+ 	}
+ 
+-	aliases16 = kcalloc(num_aliases, sizeof(*aliases16), GFP_KERNEL);
+-	if (!aliases16) {
+-		ret = -ENOMEM;
+-		goto err_free_aliases32;
+-	}
+-
+ 	for (i = 0; i < num_aliases; i++) {
+ 		if (!(aliases32[i] & 0xffff0000)) {
+-			aliases16[i] = aliases32[i];
++			alias_pool->aliases[i] = aliases32[i];
+ 			continue;
+ 		}
+ 
+ 		dev_err(dev, "Failed to parse 'i2c-alias-pool' property: I2C flags are not supported\n");
+ 		ret = -EINVAL;
+-		goto err_free_aliases16;
+-	}
+-
+-	alias_use_mask = bitmap_zalloc(num_aliases, GFP_KERNEL);
+-	if (!alias_use_mask) {
+-		ret = -ENOMEM;
+-		goto err_free_aliases16;
++		goto err_free_aliases32;
+ 	}
+ 
+ 	kfree(aliases32);
+ 
+-	atr->num_aliases = num_aliases;
+-	atr->aliases = aliases16;
+-	atr->alias_use_mask = alias_use_mask;
+-
+-	dev_dbg(dev, "i2c-alias-pool has %zu aliases", atr->num_aliases);
++	dev_dbg(dev, "i2c-alias-pool has %zu aliases\n", alias_pool->size);
+ 
+ 	return 0;
+ 
+-err_free_aliases16:
+-	kfree(aliases16);
+ err_free_aliases32:
+ 	kfree(aliases32);
++err_free_alias_pool:
++	i2c_atr_free_alias_pool(alias_pool);
+ 	return ret;
+ }
+ 
+ struct i2c_atr *i2c_atr_new(struct i2c_adapter *parent, struct device *dev,
+-			    const struct i2c_atr_ops *ops, int max_adapters)
++			    const struct i2c_atr_ops *ops, int max_adapters,
++			    u32 flags)
+ {
+ 	struct i2c_atr *atr;
+ 	int ret;
+@@ -506,20 +721,21 @@ struct i2c_atr *i2c_atr_new(struct i2c_adapter *parent, struct device *dev,
+ 	if (max_adapters > ATR_MAX_ADAPTERS)
+ 		return ERR_PTR(-EINVAL);
+ 
+-	if (!ops || !ops->attach_client || !ops->detach_client)
++	if (!ops || !ops->attach_addr || !ops->detach_addr)
+ 		return ERR_PTR(-EINVAL);
+ 
+ 	atr = kzalloc(struct_size(atr, adapter, max_adapters), GFP_KERNEL);
+ 	if (!atr)
+ 		return ERR_PTR(-ENOMEM);
+ 
+-	mutex_init(&atr->lock);
+-	spin_lock_init(&atr->alias_mask_lock);
++	lockdep_register_key(&atr->lock_key);
++	mutex_init_with_key(&atr->lock, &atr->lock_key);
+ 
+ 	atr->parent = parent;
+ 	atr->dev = dev;
+ 	atr->ops = ops;
+ 	atr->max_adapters = max_adapters;
++	atr->flags = flags;
+ 
+ 	if (parent->algo->master_xfer)
+ 		atr->algo.master_xfer = i2c_atr_master_xfer;
+@@ -534,15 +750,15 @@ struct i2c_atr *i2c_atr_new(struct i2c_adapter *parent, struct device *dev,
+ 	atr->i2c_nb.notifier_call = i2c_atr_bus_notifier_call;
+ 	ret = bus_register_notifier(&i2c_bus_type, &atr->i2c_nb);
+ 	if (ret)
+-		goto err_free_aliases;
++		goto err_free_alias_pool;
+ 
+ 	return atr;
+ 
+-err_free_aliases:
+-	bitmap_free(atr->alias_use_mask);
+-	kfree(atr->aliases);
++err_free_alias_pool:
++	i2c_atr_free_alias_pool(atr->alias_pool);
+ err_destroy_mutex:
+ 	mutex_destroy(&atr->lock);
++	lockdep_unregister_key(&atr->lock_key);
+ 	kfree(atr);
+ 
+ 	return ERR_PTR(ret);
+@@ -557,22 +773,22 @@ void i2c_atr_delete(struct i2c_atr *atr)
+ 		WARN_ON(atr->adapter[i]);
+ 
+ 	bus_unregister_notifier(&i2c_bus_type, &atr->i2c_nb);
+-	bitmap_free(atr->alias_use_mask);
+-	kfree(atr->aliases);
++	i2c_atr_free_alias_pool(atr->alias_pool);
+ 	mutex_destroy(&atr->lock);
++	lockdep_unregister_key(&atr->lock_key);
+ 	kfree(atr);
+ }
+ EXPORT_SYMBOL_NS_GPL(i2c_atr_delete, I2C_ATR);
+ 
+-int i2c_atr_add_adapter(struct i2c_atr *atr, u32 chan_id,
+-			struct device *adapter_parent,
+-			struct fwnode_handle *bus_handle)
++int i2c_atr_add_adapter(struct i2c_atr *atr, struct i2c_atr_adap_desc *desc)
+ {
++	struct fwnode_handle *bus_handle = desc->bus_handle;
+ 	struct i2c_adapter *parent = atr->parent;
++	char symlink_name[ATR_MAX_SYMLINK_LEN];
+ 	struct device *dev = atr->dev;
++	u32 chan_id = desc->chan_id;
+ 	struct i2c_atr_chan *chan;
+-	char symlink_name[ATR_MAX_SYMLINK_LEN];
+-	int ret;
++	int ret, idx;
+ 
+ 	if (chan_id >= atr->max_adapters) {
+ 		dev_err(dev, "No room for more i2c-atr adapters\n");
+@@ -588,20 +804,23 @@ int i2c_atr_add_adapter(struct i2c_atr *atr, u32 chan_id,
+ 	if (!chan)
+ 		return -ENOMEM;
+ 
+-	if (!adapter_parent)
+-		adapter_parent = dev;
++	if (!desc->parent)
++		desc->parent = dev;
+ 
+ 	chan->atr = atr;
+ 	chan->chan_id = chan_id;
+-	INIT_LIST_HEAD(&chan->alias_list);
+-	mutex_init(&chan->orig_addrs_lock);
++	INIT_LIST_HEAD(&chan->alias_pairs);
++	lockdep_register_key(&chan->alias_pairs_lock_key);
++	lockdep_register_key(&chan->orig_addrs_lock_key);
++	mutex_init_with_key(&chan->alias_pairs_lock, &chan->alias_pairs_lock_key);
++	mutex_init_with_key(&chan->orig_addrs_lock, &chan->orig_addrs_lock_key);
+ 
+ 	snprintf(chan->adap.name, sizeof(chan->adap.name), "i2c-%d-atr-%d",
+ 		 i2c_adapter_id(parent), chan_id);
+ 	chan->adap.owner = THIS_MODULE;
+ 	chan->adap.algo = &atr->algo;
+ 	chan->adap.algo_data = chan;
+-	chan->adap.dev.parent = adapter_parent;
++	chan->adap.dev.parent = desc->parent;
+ 	chan->adap.retries = parent->retries;
+ 	chan->adap.timeout = parent->timeout;
+ 	chan->adap.quirks = parent->quirks;
+@@ -628,13 +847,26 @@ int i2c_atr_add_adapter(struct i2c_atr *atr, u32 chan_id,
+ 		fwnode_handle_put(atr_node);
+ 	}
+ 
++	if (desc->num_aliases > 0) {
++		chan->alias_pool = i2c_atr_alloc_alias_pool(desc->num_aliases, false);
++		if (IS_ERR(chan->alias_pool)) {
++			ret = PTR_ERR(chan->alias_pool);
++			goto err_fwnode_put;
++		}
++
++		for (idx = 0; idx < desc->num_aliases; idx++)
++			chan->alias_pool->aliases[idx] = desc->aliases[idx];
++	} else {
++		chan->alias_pool = atr->alias_pool;
++	}
++
+ 	atr->adapter[chan_id] = &chan->adap;
+ 
+ 	ret = i2c_add_adapter(&chan->adap);
+ 	if (ret) {
+ 		dev_err(dev, "failed to add atr-adapter %u (error=%d)\n",
+ 			chan_id, ret);
+-		goto err_fwnode_put;
++		goto err_free_alias_pool;
+ 	}
+ 
+ 	snprintf(symlink_name, sizeof(symlink_name), "channel-%u",
+@@ -651,9 +883,15 @@ int i2c_atr_add_adapter(struct i2c_atr *atr, u32 chan_id,
+ 
+ 	return 0;
+ 
++err_free_alias_pool:
++	if (!chan->alias_pool->shared)
++		i2c_atr_free_alias_pool(chan->alias_pool);
+ err_fwnode_put:
+ 	fwnode_handle_put(dev_fwnode(&chan->adap.dev));
+ 	mutex_destroy(&chan->orig_addrs_lock);
++	mutex_destroy(&chan->alias_pairs_lock);
++	lockdep_unregister_key(&chan->orig_addrs_lock_key);
++	lockdep_unregister_key(&chan->alias_pairs_lock_key);
+ 	kfree(chan);
+ 	return ret;
+ }
+@@ -683,10 +921,16 @@ void i2c_atr_del_adapter(struct i2c_atr *atr, u32 chan_id)
+ 
+ 	i2c_del_adapter(adap);
+ 
++	if (!chan->alias_pool->shared)
++		i2c_atr_free_alias_pool(chan->alias_pool);
++
+ 	atr->adapter[chan_id] = NULL;
+ 
+ 	fwnode_handle_put(fwnode);
+ 	mutex_destroy(&chan->orig_addrs_lock);
++	mutex_destroy(&chan->alias_pairs_lock);
++	lockdep_unregister_key(&chan->orig_addrs_lock_key);
++	lockdep_unregister_key(&chan->alias_pairs_lock_key);
+ 	kfree(chan->orig_addrs);
+ 	kfree(chan);
+ }
+diff --git a/include/linux/i2c-atr.h b/include/linux/i2c-atr.h
+index 4d5da161c..2bb54dc87 100644
+--- a/include/linux/i2c-atr.h
++++ b/include/linux/i2c-atr.h
+@@ -18,22 +18,60 @@ struct device;
+ struct fwnode_handle;
+ struct i2c_atr;
+ 
++/**
++ * enum i2c_atr_flags - Flags for an I2C ATR driver
++ *
++ * @I2C_ATR_F_STATIC: ATR does not support dynamic mapping, use static mapping.
++ *                    Mappings will only be added or removed as a result of
++ *                    devices being added or removed from a child bus.
++ *                    The ATR pool will have to be big enough to accomodate all
++ *                    devices expected to be added to the child buses.
++ * @I2C_ATR_F_PASSTHROUGH: Allow unmapped incoming addresses to pass through
++ */
++enum i2c_atr_flags {
++	I2C_ATR_F_STATIC = BIT(0),
++	I2C_ATR_F_PASSTHROUGH = BIT(1),
++};
++
+ /**
+  * struct i2c_atr_ops - Callbacks from ATR to the device driver.
+- * @attach_client: Notify the driver of a new device connected on a child
+- *                 bus, with the alias assigned to it. The driver must
+- *                 configure the hardware to use the alias.
+- * @detach_client: Notify the driver of a device getting disconnected. The
+- *                 driver must configure the hardware to stop using the
+- *                 alias.
++ * @attach_addr: Notify the driver of a new device connected on a child
++ *               bus, with the alias assigned to it. The driver must
++ *               configure the hardware to use the alias.
++ * @detach_addr: Notify the driver of a device getting disconnected. The
++ *               driver must configure the hardware to stop using the
++ *               alias.
+  *
+  * All these functions return 0 on success, a negative error code otherwise.
+  */
+ struct i2c_atr_ops {
+-	int (*attach_client)(struct i2c_atr *atr, u32 chan_id,
+-			     const struct i2c_client *client, u16 alias);
+-	void (*detach_client)(struct i2c_atr *atr, u32 chan_id,
+-			      const struct i2c_client *client);
++	int (*attach_addr)(struct i2c_atr *atr, u32 chan_id,
++			   u16 addr, u16 alias);
++	void (*detach_addr)(struct i2c_atr *atr, u32 chan_id,
++			    u16 addr);
++};
++
++/**
++ * struct i2c_atr_adap_desc - An ATR downstream bus descriptor
++ * @chan_id:        Index of the new adapter (0 .. max_adapters-1).  This value is
++ *                  passed to the callbacks in `struct i2c_atr_ops`.
++ * @parent:         The device used as the parent of the new i2c adapter, or NULL
++ *                  to use the i2c-atr device as the parent.
++ * @bus_handle:     The fwnode handle that points to the adapter's i2c
++ *                  peripherals, or NULL.
++ * @num_aliases:    The number of aliases in this adapter's private alias pool. Set
++ *                  to zero if this adapter uses the ATR's global alias pool.
++ * @aliases:        An optional array of private aliases used by the adapter
++ *                  instead of the ATR's global pool of aliases. Must contain
++ *                  exactly num_aliases entries if num_aliases > 0, is ignored
++ *                  otherwise.
++ */
++struct i2c_atr_adap_desc {
++	u32 chan_id;
++	struct device *parent;
++	struct fwnode_handle *bus_handle;
++	size_t num_aliases;
++	u16 *aliases;
+ };
+ 
+ /**
+@@ -42,6 +80,7 @@ struct i2c_atr_ops {
+  * @dev:          The device acting as an ATR
+  * @ops:          Driver-specific callbacks
+  * @max_adapters: Maximum number of child adapters
++ * @flags:        Flags for ATR
+  *
+  * The new ATR helper is connected to the parent adapter but has no child
+  * adapters. Call i2c_atr_add_adapter() to add some.
+@@ -51,7 +90,8 @@ struct i2c_atr_ops {
+  * Return: pointer to the new ATR helper object, or ERR_PTR
+  */
+ struct i2c_atr *i2c_atr_new(struct i2c_adapter *parent, struct device *dev,
+-			    const struct i2c_atr_ops *ops, int max_adapters);
++			    const struct i2c_atr_ops *ops, int max_adapters,
++			    u32 flags);
+ 
+ /**
+  * i2c_atr_delete - Delete an I2C ATR helper.
+@@ -65,12 +105,7 @@ void i2c_atr_delete(struct i2c_atr *atr);
+ /**
+  * i2c_atr_add_adapter - Create a child ("downstream") I2C bus.
+  * @atr:        The I2C ATR
+- * @chan_id:    Index of the new adapter (0 .. max_adapters-1).  This value is
+- *              passed to the callbacks in `struct i2c_atr_ops`.
+- * @adapter_parent: The device used as the parent of the new i2c adapter, or NULL
+- *                  to use the i2c-atr device as the parent.
+- * @bus_handle: The fwnode handle that points to the adapter's i2c
+- *              peripherals, or NULL.
++ * @desc:       An ATR adapter descriptor
+  *
+  * After calling this function a new i2c bus will appear. Adding and removing
+  * devices on the downstream bus will result in calls to the
+@@ -85,9 +120,7 @@ void i2c_atr_delete(struct i2c_atr *atr);
+  *
+  * Return: 0 on success, a negative error code otherwise.
+  */
+-int i2c_atr_add_adapter(struct i2c_atr *atr, u32 chan_id,
+-			struct device *adapter_parent,
+-			struct fwnode_handle *bus_handle);
++int i2c_atr_add_adapter(struct i2c_atr *atr, struct i2c_atr_adap_desc *desc);
+ 
+ /**
+  * i2c_atr_del_adapter - Remove a child ("downstream") I2C bus added by

@@ -2923,7 +2923,7 @@ index 000000000..9453a5463
 +void sysmon_set_iio_dev_info(struct iio_dev *indio_dev);
 +int sysmon_create_avg_en_sysfs_entries(struct iio_dev *indio_dev);
 diff --git a/drivers/iio/adc/xilinx-ams.c b/drivers/iio/adc/xilinx-ams.c
-index ebc583b07..997137efa 100644
+index e12eb7137..74e6857fe 100644
 --- a/drivers/iio/adc/xilinx-ams.c
 +++ b/drivers/iio/adc/xilinx-ams.c
 @@ -117,22 +117,30 @@
@@ -2933,7 +2933,7 @@ index ebc583b07..997137efa 100644
 +#define AMS_ALARM_THRESHOLD_OFF_0C	0x0C
 +#define AMS_ALARM_THRESHOLD_OFF_M48	-0x48
  
- #define AMS_ALARM_THR_DIRECT_MASK	BIT(1)
+ #define AMS_ALARM_THR_DIRECT_MASK	BIT(0)
  #define AMS_ALARM_THR_MIN		0x0000
  #define AMS_ALARM_THR_MAX		(BIT(16) - 1)
  
@@ -3058,7 +3058,30 @@ index ebc583b07..997137efa 100644
  	ams_pl_update_reg(ams, AMS_REG_CONFIG1, AMS_REGCFG1_ALARM_MASK, cfg);
  
  	val = FIELD_GET(AMS_ISR0_ALARM_12_TO_7_MASK, pl_alarm_mask);
-@@ -400,7 +423,10 @@ static void ams_update_alarm(struct ams *ams, unsigned long alarm_mask)
+@@ -391,9 +414,10 @@ static void ams_update_pl_alarm(struct ams *ams, unsigned long alarm_mask)
+ 
+ static void ams_unmask(struct ams *ams)
+ {
+-	unsigned int status, unmask;
++	u64 status, unmask;
+ 
+ 	status = readl(ams->base + AMS_ISR_0);
++	status |= ((u64)readl(ams->base + AMS_ISR_1) << AMS_ISR1_ALARM_SHIFT);
+ 
+ 	/* Clear those bits which are not active anymore */
+ 	unmask = (ams->current_masked_alarm ^ status) & ams->current_masked_alarm;
+@@ -407,7 +431,9 @@ static void ams_unmask(struct ams *ams)
+ 	ams->current_masked_alarm &= ~ams->intr_mask;
+ 
+ 	/* Clear the interrupts before we unmask them */
+-	writel(unmask, ams->base + AMS_ISR_0);
++	writel((unmask & AMS_ISR0_ALARM_MASK), ams->base + AMS_ISR_0);
++	writel(((unmask >> AMS_ISR1_ALARM_SHIFT) & AMS_ISR1_ALARM_MASK),
++	       ams->base + AMS_ISR_1);
+ 
+ 	ams_update_intrmask(ams, ~AMS_ALARM_MASK, ~AMS_ALARM_MASK);
+ }
+@@ -423,7 +449,10 @@ static void ams_update_alarm(struct ams *ams, unsigned long alarm_mask)
  		ams_update_pl_alarm(ams, alarm_mask);
  
  	spin_lock_irqsave(&ams->intr_lock, flags);
@@ -3067,10 +3090,10 @@ index ebc583b07..997137efa 100644
 +			    (AMS_ISR0_ALARM_MASK |
 +			     ((u64)AMS_ISR1_ALARM_MASK << AMS_ISR1_ALARM_SHIFT)),
 +			    ~alarm_mask);
+ 	ams_unmask(ams);
  	spin_unlock_irqrestore(&ams->intr_lock, flags);
  }
- 
-@@ -693,9 +719,20 @@ static int ams_read_raw(struct iio_dev *indio_dev,
+@@ -717,9 +746,20 @@ static int ams_read_raw(struct iio_dev *indio_dev,
  			int *val, int *val2, long mask)
  {
  	struct ams *ams = iio_priv(indio_dev);
@@ -3092,7 +3115,7 @@ index ebc583b07..997137efa 100644
  	case IIO_CHAN_INFO_RAW:
  		mutex_lock(&ams->lock);
  		if (chan->scan_index >= AMS_CTRL_SEQ_BASE) {
-@@ -741,7 +778,8 @@ static int ams_read_raw(struct iio_dev *indio_dev,
+@@ -765,7 +805,8 @@ static int ams_read_raw(struct iio_dev *indio_dev,
  	}
  }
  
@@ -3102,7 +3125,7 @@ index ebc583b07..997137efa 100644
  {
  	int offset;
  
-@@ -757,6 +795,12 @@ static int ams_get_alarm_offset(int scan_index, enum iio_event_direction dir)
+@@ -781,6 +822,12 @@ static int ams_get_alarm_offset(int scan_index, enum iio_event_direction dir)
  		offset = 0;
  	}
  
@@ -3115,7 +3138,7 @@ index ebc583b07..997137efa 100644
  	switch (scan_index) {
  	case AMS_SEQ_TEMP:
  		return AMS_ALARM_TEMP + offset;
-@@ -794,12 +838,17 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
+@@ -818,12 +865,17 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
  {
  	int scan_index = 0, i;
  
@@ -3134,7 +3157,7 @@ index ebc583b07..997137efa 100644
  	case AMS_ALARM_BIT_TEMP:
  		scan_index += AMS_SEQ_TEMP;
  		break;
-@@ -836,6 +885,7 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
+@@ -860,6 +912,7 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
  	case AMS_ALARM_BIT_VCCAMS:
  		scan_index += AMS_SEQ_VCCAMS;
  		break;
@@ -3142,7 +3165,7 @@ index ebc583b07..997137efa 100644
  	case AMS_ALARM_BIT_TEMP_REMOTE:
  		scan_index += AMS_SEQ_TEMP_REMOTE;
  		break;
-@@ -850,18 +900,21 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
+@@ -874,18 +927,21 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
  	return &dev->channels[i];
  }
  
@@ -3167,7 +3190,7 @@ index ebc583b07..997137efa 100644
  	case AMS_SEQ_SUPPLY1:
  		return BIT(AMS_ALARM_BIT_SUPPLY1 + bit);
  	case AMS_SEQ_SUPPLY2:
-@@ -885,7 +938,9 @@ static int ams_get_alarm_mask(int scan_index)
+@@ -909,7 +965,9 @@ static int ams_get_alarm_mask(int scan_index)
  	case AMS_SEQ_VCCAMS:
  		return BIT(AMS_ALARM_BIT_VCCAMS + bit);
  	case AMS_SEQ_TEMP_REMOTE:
@@ -3178,7 +3201,7 @@ index ebc583b07..997137efa 100644
  	default:
  		return 0;
  	}
-@@ -898,7 +953,7 @@ static int ams_read_event_config(struct iio_dev *indio_dev,
+@@ -922,7 +980,7 @@ static int ams_read_event_config(struct iio_dev *indio_dev,
  {
  	struct ams *ams = iio_priv(indio_dev);
  
@@ -3187,7 +3210,7 @@ index ebc583b07..997137efa 100644
  }
  
  static int ams_write_event_config(struct iio_dev *indio_dev,
-@@ -908,9 +963,9 @@ static int ams_write_event_config(struct iio_dev *indio_dev,
+@@ -932,9 +990,9 @@ static int ams_write_event_config(struct iio_dev *indio_dev,
  				  int state)
  {
  	struct ams *ams = iio_priv(indio_dev);
@@ -3199,7 +3222,7 @@ index ebc583b07..997137efa 100644
  
  	mutex_lock(&ams->lock);
  
-@@ -933,7 +988,7 @@ static int ams_read_event_value(struct iio_dev *indio_dev,
+@@ -957,7 +1015,7 @@ static int ams_read_event_value(struct iio_dev *indio_dev,
  				enum iio_event_info info, int *val, int *val2)
  {
  	struct ams *ams = iio_priv(indio_dev);
@@ -3208,7 +3231,7 @@ index ebc583b07..997137efa 100644
  
  	mutex_lock(&ams->lock);
  
-@@ -960,7 +1015,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
+@@ -984,7 +1042,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
  
  	/* Set temperature channel threshold to direct threshold */
  	if (chan->type == IIO_TEMP) {
@@ -3217,7 +3240,7 @@ index ebc583b07..997137efa 100644
  
  		if (chan->scan_index >= AMS_PS_SEQ_MAX)
  			ams_pl_update_reg(ams, offset,
-@@ -972,7 +1027,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
+@@ -996,7 +1054,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
  					  AMS_ALARM_THR_DIRECT_MASK);
  	}
  
@@ -3226,7 +3249,7 @@ index ebc583b07..997137efa 100644
  	if (chan->scan_index >= AMS_PS_SEQ_MAX)
  		writel(val, ams->pl_base + offset);
  	else
-@@ -994,11 +1049,21 @@ static void ams_handle_event(struct iio_dev *indio_dev, u32 event)
+@@ -1018,11 +1076,21 @@ static void ams_handle_event(struct iio_dev *indio_dev, u32 event)
  		 * The temperature channel only supports over-temperature
  		 * events.
  		 */
@@ -3253,32 +3276,7 @@ index ebc583b07..997137efa 100644
  	} else {
  		/*
  		 * For other channels we don't know whether it is a upper or
-@@ -1035,11 +1100,12 @@ static void ams_handle_events(struct iio_dev *indio_dev, unsigned long events)
- static void ams_unmask_worker(struct work_struct *work)
- {
- 	struct ams *ams = container_of(work, struct ams, ams_unmask_work.work);
--	unsigned int status, unmask;
-+	u64 status, unmask;
- 
- 	spin_lock_irq(&ams->intr_lock);
- 
- 	status = readl(ams->base + AMS_ISR_0);
-+	status |= ((u64)readl(ams->base + AMS_ISR_1) << AMS_ISR1_ALARM_SHIFT);
- 
- 	/* Clear those bits which are not active anymore */
- 	unmask = (ams->current_masked_alarm ^ status) & ams->current_masked_alarm;
-@@ -1053,7 +1119,9 @@ static void ams_unmask_worker(struct work_struct *work)
- 	ams->current_masked_alarm &= ~ams->intr_mask;
- 
- 	/* Clear the interrupts before we unmask them */
--	writel(unmask, ams->base + AMS_ISR_0);
-+	writel((unmask & AMS_ISR0_ALARM_MASK), ams->base + AMS_ISR_0);
-+	writel(((unmask >> AMS_ISR1_ALARM_SHIFT) & AMS_ISR1_ALARM_MASK),
-+	       ams->base + AMS_ISR_1);
- 
- 	ams_update_intrmask(ams, ~AMS_ALARM_MASK, ~AMS_ALARM_MASK);
- 
-@@ -1069,27 +1137,37 @@ static irqreturn_t ams_irq(int irq, void *data)
+@@ -1074,27 +1142,37 @@ static irqreturn_t ams_irq(int irq, void *data)
  {
  	struct iio_dev *indio_dev = data;
  	struct ams *ams = iio_priv(indio_dev);
@@ -3320,7 +3318,7 @@ index ebc583b07..997137efa 100644
  
  	schedule_delayed_work(&ams->ams_unmask_work,
  			      msecs_to_jiffies(AMS_UNMASK_TIMEOUT_MS));
-@@ -1105,6 +1183,11 @@ static const struct iio_event_spec ams_temp_events[] = {
+@@ -1110,6 +1188,11 @@ static const struct iio_event_spec ams_temp_events[] = {
  		.dir = IIO_EV_DIR_RISING,
  		.mask_separate = BIT(IIO_EV_INFO_ENABLE) | BIT(IIO_EV_INFO_VALUE),
  	},
@@ -3332,7 +3330,7 @@ index ebc583b07..997137efa 100644
  };
  
  static const struct iio_event_spec ams_voltage_events[] = {
-@@ -1311,10 +1394,11 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
+@@ -1316,10 +1399,11 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
  			/* set threshold to max and min for each channel */
  			falling_off =
  				ams_get_alarm_offset(ams_channels[i].scan_index,
@@ -3346,7 +3344,7 @@ index ebc583b07..997137efa 100644
  			if (ams_channels[i].scan_index >= AMS_PS_SEQ_MAX) {
  				writel(AMS_ALARM_THR_MIN,
  				       ams->pl_base + falling_off);
-@@ -1326,6 +1410,24 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
+@@ -1331,6 +1415,24 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
  				writel(AMS_ALARM_THR_MAX,
  				       ams->ps_base + rising_off);
  			}

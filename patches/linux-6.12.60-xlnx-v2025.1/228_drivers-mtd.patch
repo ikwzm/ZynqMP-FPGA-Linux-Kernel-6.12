@@ -3523,10 +3523,18 @@ index 5b1117265..41c0a111f 100644
  
  		case SFDP_PROFILE1_ID:
 diff --git a/drivers/mtd/spi-nor/spansion.c b/drivers/mtd/spi-nor/spansion.c
-index fcd081b75..f1c8b4497 100644
+index fcd081b75..69ba7fd80 100644
 --- a/drivers/mtd/spi-nor/spansion.c
 +++ b/drivers/mtd/spi-nor/spansion.c
-@@ -34,6 +34,8 @@
+@@ -17,7 +17,6 @@
+ 
+ #define SPINOR_OP_CLSR		0x30	/* Clear status register 1 */
+ #define SPINOR_OP_CLPEF		0x82	/* Clear program/erase failure flags */
+-#define SPINOR_OP_CYPRESS_EX4B	0xB8	/* Exit 4-byte address mode */
+ #define SPINOR_OP_CYPRESS_DIE_ERASE		0x61	/* Chip (die) erase */
+ #define SPINOR_OP_RD_ANY_REG			0x65	/* Read any register */
+ #define SPINOR_OP_WR_ANY_REG			0x71	/* Write any register */
+@@ -34,6 +33,8 @@
  #define SPINOR_REG_CYPRESS_CFR2_MEMLAT_11_24	0xb
  #define SPINOR_REG_CYPRESS_CFR2_ADRBYT		BIT(7)
  #define SPINOR_REG_CYPRESS_CFR3			0x4
@@ -3535,7 +3543,21 @@ index fcd081b75..f1c8b4497 100644
  #define SPINOR_REG_CYPRESS_CFR3_PGSZ		BIT(4) /* Page size. */
  #define SPINOR_REG_CYPRESS_CFR5			0x6
  #define SPINOR_REG_CYPRESS_CFR5_BIT6		BIT(6)
-@@ -87,7 +89,8 @@ struct spansion_nor_params {
+@@ -59,13 +60,6 @@
+ 		   SPI_MEM_OP_DUMMY(ndummy, 0),				\
+ 		   SPI_MEM_OP_DATA_IN(1, buf, 0))
+ 
+-#define CYPRESS_NOR_EN4B_EX4B_OP(enable)				\
+-	SPI_MEM_OP(SPI_MEM_OP_CMD(enable ? SPINOR_OP_EN4B :		\
+-					   SPINOR_OP_CYPRESS_EX4B, 0),	\
+-		   SPI_MEM_OP_NO_ADDR,					\
+-		   SPI_MEM_OP_NO_DUMMY,					\
+-		   SPI_MEM_OP_NO_DATA)
+-
+ #define SPANSION_OP(opcode)						\
+ 	SPI_MEM_OP(SPI_MEM_OP_CMD(opcode, 0),				\
+ 		   SPI_MEM_OP_NO_ADDR,					\
+@@ -87,7 +81,8 @@ struct spansion_nor_params {
   */
  static void spansion_nor_clear_sr(struct spi_nor *nor)
  {
@@ -3545,7 +3567,7 @@ index fcd081b75..f1c8b4497 100644
  	int ret;
  
  	if (nor->spimem) {
-@@ -107,7 +110,7 @@ static void spansion_nor_clear_sr(struct spi_nor *nor)
+@@ -107,7 +102,7 @@ static void spansion_nor_clear_sr(struct spi_nor *nor)
  
  static int cypress_nor_sr_ready_and_clear_reg(struct spi_nor *nor, u64 addr)
  {
@@ -3554,7 +3576,7 @@ index fcd081b75..f1c8b4497 100644
  	struct spi_mem_op op =
  		CYPRESS_NOR_RD_ANY_REG_OP(params->addr_mode_nbytes, addr,
  					  0, nor->bouncebuf);
-@@ -150,7 +153,7 @@ static int cypress_nor_sr_ready_and_clear_reg(struct spi_nor *nor, u64 addr)
+@@ -150,7 +145,7 @@ static int cypress_nor_sr_ready_and_clear_reg(struct spi_nor *nor, u64 addr)
   */
  static int cypress_nor_sr_ready_and_clear(struct spi_nor *nor)
  {
@@ -3563,7 +3585,7 @@ index fcd081b75..f1c8b4497 100644
  	u64 addr;
  	int ret;
  	u8 i;
-@@ -169,10 +172,11 @@ static int cypress_nor_sr_ready_and_clear(struct spi_nor *nor)
+@@ -169,10 +164,11 @@ static int cypress_nor_sr_ready_and_clear(struct spi_nor *nor)
  
  static int cypress_nor_set_memlat(struct spi_nor *nor, u64 addr)
  {
@@ -3576,7 +3598,7 @@ index fcd081b75..f1c8b4497 100644
  
  	op = (struct spi_mem_op)
  		CYPRESS_NOR_RD_ANY_REG_OP(addr_mode_nbytes, addr, 0, buf);
-@@ -199,13 +203,14 @@ static int cypress_nor_set_memlat(struct spi_nor *nor, u64 addr)
+@@ -199,13 +195,14 @@ static int cypress_nor_set_memlat(struct spi_nor *nor, u64 addr)
  
  static int cypress_nor_set_octal_dtr_bits(struct spi_nor *nor, u64 addr)
  {
@@ -3592,7 +3614,7 @@ index fcd081b75..f1c8b4497 100644
  					  addr, 1, buf);
  
  	return spi_nor_write_any_volatile_reg(nor, &op, nor->reg_proto);
-@@ -213,7 +218,7 @@ static int cypress_nor_set_octal_dtr_bits(struct spi_nor *nor, u64 addr)
+@@ -213,7 +210,7 @@ static int cypress_nor_set_octal_dtr_bits(struct spi_nor *nor, u64 addr)
  
  static int cypress_nor_octal_dtr_en(struct spi_nor *nor)
  {
@@ -3601,7 +3623,7 @@ index fcd081b75..f1c8b4497 100644
  	u8 *buf = nor->bouncebuf;
  	u64 addr;
  	int i, ret;
-@@ -263,7 +268,7 @@ static int cypress_nor_set_single_spi_bits(struct spi_nor *nor, u64 addr)
+@@ -263,7 +260,7 @@ static int cypress_nor_set_single_spi_bits(struct spi_nor *nor, u64 addr)
  
  static int cypress_nor_octal_dtr_dis(struct spi_nor *nor)
  {
@@ -3610,7 +3632,7 @@ index fcd081b75..f1c8b4497 100644
  	u8 *buf = nor->bouncebuf;
  	u64 addr;
  	int i, ret;
-@@ -290,8 +295,9 @@ static int cypress_nor_octal_dtr_dis(struct spi_nor *nor)
+@@ -290,8 +287,9 @@ static int cypress_nor_octal_dtr_dis(struct spi_nor *nor)
  
  static int cypress_nor_quad_enable_volatile_reg(struct spi_nor *nor, u64 addr)
  {
@@ -3621,7 +3643,7 @@ index fcd081b75..f1c8b4497 100644
  	u8 cfr1v_written;
  	int ret;
  
-@@ -349,7 +355,7 @@ static int cypress_nor_quad_enable_volatile_reg(struct spi_nor *nor, u64 addr)
+@@ -349,7 +347,7 @@ static int cypress_nor_quad_enable_volatile_reg(struct spi_nor *nor, u64 addr)
   */
  static int cypress_nor_quad_enable_volatile(struct spi_nor *nor)
  {
@@ -3630,7 +3652,28 @@ index fcd081b75..f1c8b4497 100644
  	u64 addr;
  	u8 i;
  	int ret;
-@@ -442,6 +448,7 @@ static int cypress_nor_determine_addr_mode_by_sr1(struct spi_nor *nor,
+@@ -364,20 +362,6 @@ static int cypress_nor_quad_enable_volatile(struct spi_nor *nor)
+ 	return 0;
+ }
+ 
+-static int cypress_nor_set_4byte_addr_mode(struct spi_nor *nor, bool enable)
+-{
+-	int ret;
+-	struct spi_mem_op op = CYPRESS_NOR_EN4B_EX4B_OP(enable);
+-
+-	spi_nor_spimem_setup_op(nor, &op, nor->reg_proto);
+-
+-	ret = spi_mem_exec_op(nor->spimem, &op);
+-	if (ret)
+-		dev_dbg(nor->dev, "error %d setting 4-byte mode\n", ret);
+-
+-	return ret;
+-}
+-
+ /**
+  * cypress_nor_determine_addr_mode_by_sr1() - Determine current address mode
+  *                                            (3 or 4-byte) by querying status
+@@ -442,6 +426,7 @@ static int cypress_nor_determine_addr_mode_by_sr1(struct spi_nor *nor,
   */
  static int cypress_nor_set_addr_mode_nbytes(struct spi_nor *nor)
  {
@@ -3638,7 +3681,7 @@ index fcd081b75..f1c8b4497 100644
  	struct spi_mem_op op;
  	u8 addr_mode;
  	int ret;
-@@ -483,8 +490,8 @@ static int cypress_nor_set_addr_mode_nbytes(struct spi_nor *nor)
+@@ -483,8 +468,8 @@ static int cypress_nor_set_addr_mode_nbytes(struct spi_nor *nor)
  			return spi_nor_set_4byte_addr_mode(nor, true);
  	}
  
@@ -3649,7 +3692,7 @@ index fcd081b75..f1c8b4497 100644
  
  	return 0;
  }
-@@ -501,10 +508,10 @@ static int cypress_nor_set_addr_mode_nbytes(struct spi_nor *nor)
+@@ -501,10 +486,10 @@ static int cypress_nor_set_addr_mode_nbytes(struct spi_nor *nor)
   */
  static int cypress_nor_get_page_size(struct spi_nor *nor)
  {
@@ -3662,7 +3705,7 @@ index fcd081b75..f1c8b4497 100644
  	int ret;
  	u8 i;
  
-@@ -531,25 +538,75 @@ static int cypress_nor_get_page_size(struct spi_nor *nor)
+@@ -531,33 +516,80 @@ static int cypress_nor_get_page_size(struct spi_nor *nor)
  
  static void cypress_nor_ecc_init(struct spi_nor *nor)
  {
@@ -3734,13 +3777,12 @@ index fcd081b75..f1c8b4497 100644
  	struct spi_mem_op op;
  	int ret;
  
- 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-	/* Assign 4-byte address mode method that is not determined in BFPT */
 -	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
-+	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
- 
+-
  	ret = cypress_nor_set_addr_mode_nbytes(nor);
  	if (ret)
-@@ -557,7 +614,7 @@ s25fs256t_post_bfpt_fixup(struct spi_nor *nor,
+ 		return ret;
  
  	/* Read Architecture Configuration Register (ARCFN) */
  	op = (struct spi_mem_op)
@@ -3749,7 +3791,7 @@ index fcd081b75..f1c8b4497 100644
  					  SPINOR_REG_CYPRESS_ARCFN, 1,
  					  nor->bouncebuf);
  	ret = spi_nor_read_any_reg(nor, &op, nor->reg_proto);
-@@ -573,7 +630,7 @@ s25fs256t_post_bfpt_fixup(struct spi_nor *nor,
+@@ -573,7 +605,7 @@ s25fs256t_post_bfpt_fixup(struct spi_nor *nor,
  
  static int s25fs256t_post_sfdp_fixup(struct spi_nor *nor)
  {
@@ -3758,16 +3800,14 @@ index fcd081b75..f1c8b4497 100644
  
  	/*
  	 * S25FS256T does not define the SCCR map, but we would like to use the
-@@ -614,24 +671,25 @@ s25hx_t_post_bfpt_fixup(struct spi_nor *nor,
- 			const struct sfdp_parameter_header *bfpt_header,
+@@ -615,23 +647,21 @@ s25hx_t_post_bfpt_fixup(struct spi_nor *nor,
  			const struct sfdp_bfpt *bfpt)
  {
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
  	int ret;
- 
- 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-
+-	/* Assign 4-byte address mode method that is not determined in BFPT */
 -	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
-+	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
++	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
  
  	ret = cypress_nor_set_addr_mode_nbytes(nor);
  	if (ret)
@@ -3787,7 +3827,7 @@ index fcd081b75..f1c8b4497 100644
  	struct spi_nor_erase_type *erase_type = params->erase_map.erase_type;
  	unsigned int i;
  
-@@ -667,7 +725,7 @@ static int s25hx_t_post_sfdp_fixup(struct spi_nor *nor)
+@@ -667,7 +697,7 @@ static int s25hx_t_post_sfdp_fixup(struct spi_nor *nor)
  
  static int s25hx_t_late_init(struct spi_nor *nor)
  {
@@ -3796,7 +3836,7 @@ index fcd081b75..f1c8b4497 100644
  
  	/* Fast Read 4B requires mode cycles */
  	params->reads[SNOR_CMD_READ_FAST].num_mode_clocks = 8;
-@@ -702,7 +760,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
+@@ -702,7 +732,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
  
  static int s28hx_t_post_sfdp_fixup(struct spi_nor *nor)
  {
@@ -3805,16 +3845,13 @@ index fcd081b75..f1c8b4497 100644
  
  	if (!params->n_dice || !params->vreg_offset) {
  		dev_err(nor->dev, "%s failed. The volatile register offset could not be retrieved from SFDP.\n",
-@@ -746,15 +804,17 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
+@@ -746,15 +776,12 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
  				   const struct sfdp_parameter_header *bfpt_header,
  				   const struct sfdp_bfpt *bfpt)
  {
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
-+
- 	/* Assign 4-byte address mode method that is not determined in BFPT */
+-	/* Assign 4-byte address mode method that is not determined in BFPT */
 -	nor->params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
-+	params->set_4byte_addr_mode = cypress_nor_set_4byte_addr_mode;
- 
+-
  	return cypress_nor_set_addr_mode_nbytes(nor);
  }
  
@@ -3825,7 +3862,7 @@ index fcd081b75..f1c8b4497 100644
  
  	params->set_octal_dtr = cypress_nor_set_octal_dtr;
  	params->ready = cypress_nor_sr_ready_and_clear;
-@@ -763,24 +823,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
+@@ -763,24 +790,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
  	return 0;
  }
  
@@ -3871,7 +3908,7 @@ index fcd081b75..f1c8b4497 100644
  
  	return 0;
  }
-@@ -825,6 +905,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -825,6 +872,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl256s0",
  		.size = SZ_32M,
  		.sector_size = SZ_256K,
@@ -3879,7 +3916,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SPI_NOR_SKIP_SFDP | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -838,6 +919,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -838,6 +886,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x02, 0x19, 0x4d, 0x01, 0x80),
  		.name = "s25fl256s1",
  		.size = SZ_32M,
@@ -3887,7 +3924,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -851,7 +933,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -851,7 +900,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl512s",
  		.size = SZ_64M,
  		.sector_size = SZ_256K,
@@ -3896,7 +3933,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -876,6 +958,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -876,6 +925,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl128s0",
  		.size = SZ_16M,
  		.sector_size = SZ_256K,
@@ -3904,7 +3941,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -889,6 +972,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -889,6 +939,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x20, 0x18, 0x4d, 0x01, 0x80),
  		.name = "s25fl128s1",
  		.size = SZ_16M,
@@ -3912,7 +3949,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -933,18 +1017,21 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -933,18 +984,21 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x60, 0x17),
  		.name = "s25fl064l",
  		.size = SZ_8M,
@@ -3934,7 +3971,7 @@ index fcd081b75..f1c8b4497 100644
  		.no_sfdp_flags = SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.fixup_flags = SPI_NOR_4B_OPCODES,
  	}, {
-@@ -966,6 +1053,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -966,6 +1020,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2a, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hl02gt",
@@ -3942,7 +3979,7 @@ index fcd081b75..f1c8b4497 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -986,6 +1074,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -986,6 +1041,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2b, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hs02gt",
@@ -3950,7 +3987,7 @@ index fcd081b75..f1c8b4497 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -1016,7 +1105,8 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -1016,7 +1072,8 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x34, 0x5b, 0x1c),
  		.name = "s28hs02gt",
  		.mfr_flags = USE_CLPEF,
@@ -3960,7 +3997,7 @@ index fcd081b75..f1c8b4497 100644
  	}, {
  		.id = SNOR_ID(0xef, 0x40, 0x13),
  		.name = "s25fl004k",
-@@ -1081,7 +1171,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
+@@ -1081,7 +1138,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
  
  static int spansion_nor_late_init(struct spi_nor *nor)
  {
@@ -4025,7 +4062,7 @@ index 175211fe6..eeb19a5a9 100644
  	}
  };
 diff --git a/drivers/mtd/spi-nor/swp.c b/drivers/mtd/spi-nor/swp.c
-index fdc411f2a..5b362af48 100644
+index fdc411f2a..2d9fd305d 100644
 --- a/drivers/mtd/spi-nor/swp.c
 +++ b/drivers/mtd/spi-nor/swp.c
 @@ -7,6 +7,7 @@
@@ -4073,7 +4110,7 @@ index fdc411f2a..5b362af48 100644
  static void spi_nor_get_locked_range_sr(struct spi_nor *nor, u8 sr, loff_t *ofs,
  					u64 *len)
  {
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	struct mtd_info *mtd = &nor->mtd;
  	u64 min_prot_len;
  	u8 mask = spi_nor_get_sr_bp_mask(nor);
  	u8 tb_mask = spi_nor_get_sr_tb_mask(nor);
@@ -4091,14 +4128,14 @@ index fdc411f2a..5b362af48 100644
  
 -	if (*len > nor->params->size)
 -		*len = nor->params->size;
-+	if (*len > params->size)
-+		*len = params->size;
++	if (*len > mtd->size)
++		*len = mtd->size;
  
  	if (nor->flags & SNOR_F_HAS_SR_TB && sr & tb_mask)
  		*ofs = 0;
  	else
 -		*ofs = nor->params->size - *len;
-+		*ofs = params->size - *len;
++		*ofs = mtd->size - *len;
  }
  
  /*
@@ -4106,7 +4143,7 @@ index fdc411f2a..5b362af48 100644
   */
  static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  {
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	struct mtd_info *mtd = &nor->mtd;
  	u64 min_prot_len;
  	int ret, status_old, status_new;
  	u8 mask = spi_nor_get_sr_bp_mask(nor);
@@ -4115,7 +4152,7 @@ index fdc411f2a..5b362af48 100644
  
  	/* If anything above us is unlocked, we can't use 'top' protection */
 -	if (!spi_nor_is_locked_sr(nor, ofs + len, nor->params->size - (ofs + len),
-+	if (!spi_nor_is_locked_sr(nor, ofs + len, params->size - (ofs + len),
++	if (!spi_nor_is_locked_sr(nor, ofs + len, mtd->size - (ofs + len),
  				  status_old))
  		can_be_top = false;
  
@@ -4124,12 +4161,12 @@ index fdc411f2a..5b362af48 100644
  	/* lock_len: length of region that should end up locked */
  	if (use_top)
 -		lock_len = nor->params->size - ofs;
-+		lock_len = params->size - ofs;
++		lock_len = mtd->size - ofs;
  	else
  		lock_len = ofs + len;
  
 -	if (lock_len == nor->params->size) {
-+	if (lock_len == params->size) {
++	if (lock_len == mtd->size) {
  		val = mask;
  	} else {
  		min_prot_len = spi_nor_get_min_prot_length_sr(nor);
@@ -4158,20 +4195,20 @@ index fdc411f2a..5b362af48 100644
  
 +static bool spi_nor_is_lower_area(struct spi_nor *nor, loff_t ofs, uint64_t len)
 +{
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	struct mtd_info *mtd = &nor->mtd;
 +
 +	if (nor->flags & SNOR_F_HAS_SR_TB)
-+		return ((ofs + len) <= (params->size >> 1));
++		return ((ofs + len) <= (mtd->size >> 1));
 +
 +	return false;
 +}
 +
 +static bool spi_nor_is_upper_area(struct spi_nor *nor, loff_t ofs, uint64_t len)
 +{
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	struct mtd_info *mtd = &nor->mtd;
 +
 +	if ((nor->flags & SNOR_F_HAS_SR_TB))
-+		return (ofs >= (params->size >> 1));
++		return (ofs >= (mtd->size >> 1));
 +
 +	return true;
 +}
@@ -4183,7 +4220,7 @@ index fdc411f2a..5b362af48 100644
   */
  static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  {
-+	struct spi_nor_flash_parameter *params = spi_nor_get_params(nor, 0);
++	struct mtd_info *mtd = &nor->mtd;
  	u64 min_prot_len;
  	int ret, status_old, status_new;
  	u8 mask = spi_nor_get_sr_bp_mask(nor);
@@ -4199,7 +4236,7 @@ index fdc411f2a..5b362af48 100644
  	/* If anything above us is locked, we can't use 'bottom' protection */
 -	if (!spi_nor_is_unlocked_sr(nor, ofs + len, nor->params->size - (ofs + len),
 -				    status_old))
-+	if (!spi_nor_is_unlocked_sr(nor, ofs + len, params->size - (ofs + len),
++	if (!spi_nor_is_unlocked_sr(nor, ofs + len, mtd->size - (ofs + len),
 +				    status_old) || spi_nor_is_upper_area(nor, ofs, len))
  		can_be_bottom = false;
  
@@ -4209,7 +4246,7 @@ index fdc411f2a..5b362af48 100644
  	/* lock_len: length of region that should remain locked */
  	if (use_top)
 -		lock_len = nor->params->size - (ofs + len);
-+		lock_len = params->size - (ofs + len);
++		lock_len = mtd->size - (ofs + len);
  	else
  		lock_len = ofs;
  
@@ -4232,7 +4269,7 @@ index fdc411f2a..5b362af48 100644
  		status_new |= tb_mask;
  
  	/* Don't bother if they're the same */
-@@ -346,41 +389,96 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
+@@ -346,41 +389,139 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
  
  void spi_nor_init_default_locking_ops(struct spi_nor *nor)
  {
@@ -4243,8 +4280,51 @@ index fdc411f2a..5b362af48 100644
  }
  
 -static int spi_nor_lock(struct mtd_info *mtd, loff_t ofs, u64 len)
-+static int spi_nor_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
++static inline u16 min_lockable_sectors(struct spi_nor *nor,
++				       u16 n_sectors)
  {
++	u16 lock_granularity;
++
++	/*
++	 * Revisit - SST (not used by us) has the same JEDEC ID as micron but
++	 * protected area table is similar to that of spansion.
++	 */
++	lock_granularity = max(1, n_sectors / M25P_MAX_LOCKABLE_SECTORS);
++	if (nor->info->id->bytes[0] == CFI_MFR_ST ||	/* Micron */
++	    nor->info->id->bytes[0] == CFI_MFR_PMC ||	/* ISSI */
++	    nor->info->id->bytes[0] == CFI_MFR_MACRONIX)	/* Macronix */
++		lock_granularity = 1;
++
++	return lock_granularity;
++}
++
++static inline uint32_t get_protected_area_start(struct spi_nor *nor,
++						u8 lock_bits)
++{
++	struct mtd_info *mtd = &nor->mtd;
++	u32 sector_size;
++	u16 n_sectors;
++	u64 mtd_size;
++
++	n_sectors = nor->info->size / nor->info->sector_size;
++	sector_size = nor->info->sector_size;
++	mtd_size = mtd->size;
++
++	if (nor->flags & SNOR_F_HAS_PARALLEL) {
++		sector_size = (nor->info->sector_size >> 1);
++		mtd_size = (mtd->size >> 1);
++	}
++	if (nor->flags & SNOR_F_HAS_STACKED) {
++		n_sectors >>= 1;
++		mtd_size = (mtd->size >> 1);
++	}
++
++	return mtd_size - (1 << (lock_bits - 1)) *
++		min_lockable_sectors(nor, n_sectors) * sector_size;
++}
++
++static int spi_nor_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
++{
 +	struct spi_nor_flash_parameter *params;
  	struct spi_nor *nor = mtd_to_spi_nor(mtd);
 +	u32 cur_cs_num = 0;
@@ -4333,7 +4413,7 @@ index fdc411f2a..5b362af48 100644
  	struct spi_nor *nor = mtd_to_spi_nor(mtd);
  	int ret;
  
-@@ -388,12 +486,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -388,12 +529,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
  	if (ret)
  		return ret;
  
@@ -4368,7 +4448,7 @@ index fdc411f2a..5b362af48 100644
  /**
   * spi_nor_try_unlock_all() - Tries to unlock the entire flash memory array.
   * @nor:	pointer to a 'struct spi_nor'.
-@@ -408,23 +527,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -408,23 +570,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
   */
  void spi_nor_try_unlock_all(struct spi_nor *nor)
  {

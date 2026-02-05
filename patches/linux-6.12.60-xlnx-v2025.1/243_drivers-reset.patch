@@ -1,0 +1,12 @@
+diff --git a/Documentation/devicetree/bindings/power/reset/xlnx,zynqmp-power.yaml b/Documentation/devicetree/bindings/power/reset/xlnx,zynqmp-power.yaml
+index 799831636..079ad977b 100644
+--- a/Documentation/devicetree/bindings/power/reset/xlnx,zynqmp-power.yaml
++++ b/Documentation/devicetree/bindings/power/reset/xlnx,zynqmp-power.yaml
+@@ -46,7 +46,6 @@ properties:
+ 
+ required:
+   - compatible
+-  - interrupts
+ 
+ additionalProperties: false
+ 

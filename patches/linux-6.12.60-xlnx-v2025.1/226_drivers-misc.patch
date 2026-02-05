@@ -14162,10 +14162,10 @@ index 000000000..f72b14a8b
 +}
 diff --git a/drivers/misc/xilinx-ai-engine/ai-engine-internal.h b/drivers/misc/xilinx-ai-engine/ai-engine-internal.h
 new file mode 100644
-index 000000000..a29719013
+index 000000000..f7adff61b
 --- /dev/null
 +++ b/drivers/misc/xilinx-ai-engine/ai-engine-internal.h
-@@ -0,0 +1,1799 @@
+@@ -0,0 +1,1805 @@
 +/* SPDX-License-Identifier: GPL-2.0-only */
 +/*
 + * Xilinx AI Engine driver internal header
@@ -15444,6 +15444,12 @@ index 000000000..a29719013
 +	u16 scrub_period; /* Value to be written to the ecc scrub period register */
 +} __aligned(4);
 +
++struct aie_op_tlast {
++	u16 type; /* Operation Type */
++	u16 len; /* Operation struct length */
++	u16 state; /* Value to be written to the error on tlast bit to enable/disable */
++} __aligned(4);
++
 +/**
 + * struct aie_pm_ops - AI engine plm calls struct.
 + * @pkt_va: pm ops data virtual address.
@@ -15967,10 +15973,10 @@ index 000000000..a29719013
 +#endif /* AIE_INTERNAL_H */
 diff --git a/drivers/misc/xilinx-ai-engine/ai-engine-interrupt.c b/drivers/misc/xilinx-ai-engine/ai-engine-interrupt.c
 new file mode 100644
-index 000000000..ca2e56e76
+index 000000000..aca5ac377
 --- /dev/null
 +++ b/drivers/misc/xilinx-ai-engine/ai-engine-interrupt.c
-@@ -0,0 +1,2729 @@
+@@ -0,0 +1,2730 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Xilinx AI Engine device driver
@@ -17157,7 +17163,6 @@ index 000000000..ca2e56e76
 +	int end_col;
 +
 +	aperture = apart->aperture;
-+	mutex_lock(&aperture->mlock);
 +	mutex_lock(&apart->mlock);
 +	if (!apart->status) {
 +		dev_err_ratelimited(&apart->dev, "USER_EVENT1 ISR: apart not active");
@@ -17198,14 +17203,16 @@ index 000000000..ca2e56e76
 +		aie_clear_event_status(apart, &loc, AIE_PL_MOD,
 +				       event_mod->user_event1);
 +	}
++	mutex_unlock(&apart->mlock);
 +	if (complete && apart->user_event1_complete)
 +		apart->user_event1_complete(apart->partition_id, apart->user_event1_priv);
 +	loc.col = apart->range.start.col + 1;
 +	loc.row = 0;
 +	aie_aperture_enable_l2_ctrl(aperture, &loc, l2_mask);
++
++	return complete ? IRQ_HANDLED : IRQ_NONE;
 +out:
 +	mutex_unlock(&apart->mlock);
-+	mutex_unlock(&aperture->mlock);
 +	return complete ? IRQ_HANDLED : IRQ_NONE;
 +}
 +
@@ -20863,10 +20870,10 @@ index 000000000..b522d38e4
 +EXPORT_SYMBOL_GPL(aie_load_cert);
 diff --git a/drivers/misc/xilinx-ai-engine/ai-engine-pm.c b/drivers/misc/xilinx-ai-engine/ai-engine-pm.c
 new file mode 100644
-index 000000000..b7a13bacf
+index 000000000..4efeccb57
 --- /dev/null
 +++ b/drivers/misc/xilinx-ai-engine/ai-engine-pm.c
-@@ -0,0 +1,458 @@
+@@ -0,0 +1,477 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Xilinx AI Engine driver AIE-2PS device specific implementation
@@ -20915,6 +20922,7 @@ index 000000000..b7a13bacf
 +		pm_ops->offset -= sizeof(*pm_ops->op_range);
 +
 +	trace_aie_pm_ops(apart->aperture->node_id, pm_ops->pkt_va, pm_ops->offset, pm_ops->pkt_dma);
++
 +	ret = versal2_pm_aie2ps_operation(apart->aperture->node_id, pm_ops->offset,
 +					  upper_32_bits(pm_ops->pkt_dma),
 +					  lower_32_bits(pm_ops->pkt_dma));
@@ -21271,6 +21279,24 @@ index 000000000..b7a13bacf
 +			return ret;
 +		*((u16 *)data) = op->val;
 +		goto again;
++	}
++	if (type & AIE_PART_INIT_OPT_DIS_TLAST_ERROR) {
++		struct aie_op_tlast *op;
++
++		if (check_add_overflow(pm_ops->offset, sizeof(*op), &end) ||
++		    end >= pm_ops->size) {
++			ret = aie_part_pm_ops_flush(apart);
++			if (ret)
++				return ret;
++			goto again;
++		}
++		type &= AIE_PART_INIT_OPT_DIS_TLAST_ERROR;
++		op = pm_ops->pkt_va + pm_ops->offset;
++		pm_ops->offset += sizeof(*op);
++		op->type = XILINX_AIE_OPS_CTRL_PKT_TLAST_ERR;
++		op->len = sizeof(*op);
++		op->state = *((u16 *)data);
++		*((u16 *)data) = op->state;
 +	}
 +	if (type & AIE_PART_INIT_OPT_HANDSHAKE) {
 +		struct aie_op_handshake *op;
@@ -21799,10 +21825,10 @@ index 000000000..501f79b91
 +}
 diff --git a/drivers/misc/xilinx-ai-engine/ai-engine-reset.c b/drivers/misc/xilinx-ai-engine/ai-engine-reset.c
 new file mode 100644
-index 000000000..1f2589bc9
+index 000000000..2bc3ee963
 --- /dev/null
 +++ b/drivers/misc/xilinx-ai-engine/ai-engine-reset.c
-@@ -0,0 +1,1123 @@
+@@ -0,0 +1,1134 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Xilinx AI Engine device driver resets implementation
@@ -22641,6 +22667,17 @@ index 000000000..1f2589bc9
 +	if (args->init_opts & AIE_PART_INIT_ERROR_HANDLING) {
 +		opts |= AIE_PART_INIT_ERROR_HANDLING;
 +		ret = aie_error_handling_init(apart);
++		if (ret)
++			goto out;
++	}
++
++	if (args->init_opts & AIE_PART_INIT_OPT_DIS_TLAST_ERROR) {
++		u16 data = 0;
++
++		opts |= AIE_PART_INIT_OPT_DIS_TLAST_ERROR;
++		ret = aie_part_pm_ops(apart, &data,
++				      AIE_PART_INIT_OPT_DIS_TLAST_ERROR,
++				      apart->range, 1);
 +		if (ret)
 +			goto out;
 +	}
@@ -29355,10 +29392,10 @@ index 000000000..6b8481795
 +#endif /* _DPU_UAPI_H_ */
 diff --git a/include/linux/xlnx-ai-engine.h b/include/linux/xlnx-ai-engine.h
 new file mode 100644
-index 000000000..77a9e6e47
+index 000000000..44a1e40ef
 --- /dev/null
 +++ b/include/linux/xlnx-ai-engine.h
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,275 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +/*
 + * xlnx-ai-engine.h - Xilinx AI engine external interface
@@ -29522,12 +29559,6 @@ index 000000000..77a9e6e47
 +int aie_partition_uc_wakeup(struct device *dev, struct aie_location *loc);
 +int aie_partition_initialize(struct device *dev, struct aie_partition_init_args *args);
 +int aie_partition_teardown(struct device *dev);
-+int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
-+int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
-+bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc);
-+int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc);
-+int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval);
-+int aie_load_cert(struct device *dev, unsigned char *elf_addr);
 +/**
 + * aie_get_error_category() - Get the category of an AIE error
 + * @err: AI engine hardware error
@@ -29634,36 +29665,6 @@ index 000000000..77a9e6e47
 +
 +static inline int aie_part_rscmgr_set_static_range(struct device *dev,
 +						   u8 start_col, u8 num_col, void *meta)
-+{
-+	return -EINVAL;
-+}
-+
-+int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
-+{
-+	return -EINVAL;
-+}
-+
-+int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
-+{
-+	return -EINVAL;
-+}
-+
-+bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc)
-+{
-+	return false;
-+}
-+
-+int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc)
-+{
-+	return 0;
-+}
-+
-+int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval)
-+{
-+	return -EINVAL;
-+}
-+
-+int aie_load_cert(struct device *dev, unsigned char *elf_addr)
 +{
 +	return -EINVAL;
 +}
@@ -29860,10 +29861,10 @@ index 000000000..72885cf61
 +#endif /* __UAPI_LINUX_RSMU_CDEV_H */
 diff --git a/include/uapi/linux/xlnx-ai-engine.h b/include/uapi/linux/xlnx-ai-engine.h
 new file mode 100644
-index 000000000..04abb24dc
+index 000000000..a81f822bc
 --- /dev/null
 +++ b/include/uapi/linux/xlnx-ai-engine.h
-@@ -0,0 +1,784 @@
+@@ -0,0 +1,829 @@
 +/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 +/*
 + * Copyright (c) 2020, Xilinx Inc.
@@ -30161,6 +30162,8 @@ index 000000000..04abb24dc
 +#define AIE_PART_INIT_OPT_HW_ERR_STS		BIT(18)
 +#define AIE_PART_INIT_OPT_DIS_MEM_INTERLEAVE	BIT(19)
 +#define AIE_PART_INIT_OPT_HANDSHAKE		BIT(20)
++#define AIE_PART_INIT_OPT_DIS_TLAST_ERROR	BIT(21)
++#define AIE_PART_INIT_OPT_EN_TLAST_ERROR	BIT(22)
 +
 +#define AIE_PART_INIT_OPT_DEFAULT	(AIE_PART_INIT_OPT_COLUMN_RST		|	\
 +					 AIE_PART_INIT_OPT_SHIM_RST		|	\
@@ -30647,6 +30650,49 @@ index 000000000..04abb24dc
 + */
 +#define AIE_UPDATE_SHIMDMA_DMABUF_BD_ADDR_IOCTL	_IOW(AIE_IOCTL_BASE, 0x1e, \
 +						struct aie_dmabuf_bd_args)
++#if IS_ENABLED(CONFIG_XILINX_AIE)
++
++int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
++int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data);
++bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc);
++int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc);
++int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval);
++int aie_load_cert(struct device *dev, unsigned char *elf_addr);
++
++#else /* IS_ENABLED(CONFIG_XILINX_AIE) */
++
++int aie_partition_write_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
++{
++	return -EINVAL;
++}
++
++int aie_partition_read_privileged_mem(struct device *dev, size_t offset, size_t len, void *data)
++{
++	return -EINVAL;
++}
++
++bool aie_partition_check_noc_aximm(struct device *dev, struct aie_location *loc)
++{
++	return false;
++}
++
++int aie_partition_check_uc_aximm(struct device *dev, struct aie_location *loc)
++{
++	return 0;
++}
++
++int aie_partition_uc_zeroize_mem(struct device *dev, struct aie_location *loc, u32 regval)
++{
++	return -EINVAL;
++}
++
++int aie_load_cert(struct device *dev, unsigned char *elf_addr)
++{
++	return -EINVAL;
++}
++
++#endif /* IS_ENABLED(CONFIG_XILINX_AIE) */
++
 +#endif
 diff --git a/include/uapi/misc/xilinx_puf.h b/include/uapi/misc/xilinx_puf.h
 new file mode 100644

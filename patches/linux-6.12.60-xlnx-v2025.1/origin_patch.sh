@@ -22,6 +22,7 @@ run_patch()
     run_command "git commit -m '[patch] ${1}'"
 }
 
+run_patch 002_include.patch
 run_patch 010_arch-arm-mach-zynq.patch
 run_patch 011_arch-arm-configs.patch
 run_patch 012_arch-arm-boot-dts.patch
@@ -45,6 +46,7 @@ run_patch 212_drivers-i2c.patch
 run_patch 213_drivers-i3c.patch
 run_patch 214_drivers-iio.patch
 run_patch 216_drivers-irqchip.patch
+run_patch 217_drivers-mailbox.patch
 run_patch 218_drivers-media-common.patch
 run_patch 219_drivers-media-i2c.patch
 run_patch 220_drivers-media-mc.patch
@@ -53,7 +55,6 @@ run_patch 222_drivers-media-test-drivers.patch
 run_patch 224_drivers-media-v4l2.patch
 run_patch 225_drivers-mfd.patch
 run_patch 226_drivers-misc.patch
-run_patch 227_drivers-mmc.patch
 run_patch 228_drivers-mtd.patch
 run_patch 230_drivers-net-ethernet.patch
 run_patch 231_drivers-net-phy.patch
@@ -65,6 +66,7 @@ run_patch 238_drivers-pinctrl.patch
 run_patch 240_drivers-ptp.patch
 run_patch 241_drivers-pwm.patch
 run_patch 242_drivers-remoteproc.patch
+run_patch 243_drivers-reset.patch
 run_patch 246_drivers-soc-xilinx.patch
 run_patch 247_drivers-spi.patch
 run_patch 248_drivers-staging.patch

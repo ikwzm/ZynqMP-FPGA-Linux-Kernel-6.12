@@ -1117,10 +1117,10 @@ index 000000000..84a4f2ca6
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/dma/xilinx/mmi_dcdma.c b/drivers/dma/xilinx/mmi_dcdma.c
 new file mode 100644
-index 000000000..9eb29b534
+index 000000000..7aa12d49c
 --- /dev/null
 +++ b/drivers/dma/xilinx/mmi_dcdma.c
-@@ -0,0 +1,1363 @@
+@@ -0,0 +1,1370 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * AMD Multimedia Integrated Display Controller DMA Engine Driver
@@ -1132,6 +1132,7 @@ index 000000000..9eb29b534
 +#include <linux/delay.h>
 +#include <linux/dma/xilinx_dpdma.h>
 +#include <linux/dmapool.h>
++#include <linux/dma-mapping.h>
 +#include <linux/iopoll.h>
 +#include <linux/module.h>
 +#include <linux/of.h>
@@ -2374,6 +2375,12 @@ index 000000000..9eb29b534
 +	INIT_LIST_HEAD(&ddev->channels);
 +
 +	platform_set_drvdata(pdev, mdev);
++
++	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(48));
++	if (ret < 0) {
++		dev_err(&pdev->dev, "failed to set DMA mask %d\n", ret);
++		return ret;
++	}
 +
 +	mdev->axi_clk = devm_clk_get_enabled(&pdev->dev, NULL);
 +	if (IS_ERR(mdev->axi_clk))

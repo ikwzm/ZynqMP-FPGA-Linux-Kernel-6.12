@@ -831,7 +831,7 @@ index 000000000..126842f5d
 +
 +builtin_platform_driver(amd_mdb_pcie_driver);
 diff --git a/drivers/pci/controller/pcie-xilinx-cpm.c b/drivers/pci/controller/pcie-xilinx-cpm.c
-index 1594d9e9e..56979a9b2 100644
+index 1594d9e9e..584a14a01 100644
 --- a/drivers/pci/controller/pcie-xilinx-cpm.c
 +++ b/drivers/pci/controller/pcie-xilinx-cpm.c
 @@ -6,6 +6,8 @@
@@ -1035,10 +1035,13 @@ index 1594d9e9e..56979a9b2 100644
  	return 0;
  }
  
-@@ -569,28 +640,40 @@ static int xilinx_cpm_pcie_probe(struct platform_device *pdev)
- 	if (err)
- 		return err;
+@@ -565,9 +636,13 @@ static int xilinx_cpm_pcie_probe(struct platform_device *pdev)
  
+ 	port->dev = dev;
+ 
+-	err = xilinx_cpm_pcie_init_irq_domain(port);
+-	if (err)
+-		return err;
 +	port->variant = of_device_get_match_data(dev);
 +
 +	if (port->variant->version != CPM5NC_HOST) {
@@ -1046,10 +1049,10 @@ index 1594d9e9e..56979a9b2 100644
 +		if (err)
 +			return err;
 +	}
-+
+ 
  	bus = resource_list_first_type(&bridge->windows, IORESOURCE_BUS);
  	if (!bus) {
- 		err = -ENODEV;
+@@ -575,22 +650,26 @@ static int xilinx_cpm_pcie_probe(struct platform_device *pdev)
  		goto err_free_irq_domains;
  	}
  
@@ -1082,7 +1085,7 @@ index 1594d9e9e..56979a9b2 100644
  	bridge->sysdata = port->cfg;
  	bridge->ops = (struct pci_ops *)&pci_generic_ecam_ops.pci_ops;
  
-@@ -601,20 +684,40 @@ static int xilinx_cpm_pcie_probe(struct platform_device *pdev)
+@@ -601,20 +680,40 @@ static int xilinx_cpm_pcie_probe(struct platform_device *pdev)
  	return 0;
  
  err_host_bridge:
@@ -1125,7 +1128,7 @@ index 1594d9e9e..56979a9b2 100644
  };
  
  static const struct of_device_id xilinx_cpm_pcie_of_match[] = {
-@@ -626,6 +729,14 @@ static const struct of_device_id xilinx_cpm_pcie_of_match[] = {
+@@ -626,6 +725,14 @@ static const struct of_device_id xilinx_cpm_pcie_of_match[] = {
  		.compatible = "xlnx,versal-cpm5-host",
  		.data = &cpm5_host,
  	},
@@ -1141,7 +1144,7 @@ index 1594d9e9e..56979a9b2 100644
  };
  
 diff --git a/drivers/pci/controller/pcie-xilinx-nwl.c b/drivers/pci/controller/pcie-xilinx-nwl.c
-index a8ae14474..a91eed881 100644
+index 2e7356c28..63494b67e 100644
 --- a/drivers/pci/controller/pcie-xilinx-nwl.c
 +++ b/drivers/pci/controller/pcie-xilinx-nwl.c
 @@ -19,7 +19,6 @@
@@ -1221,7 +1224,7 @@ index a8ae14474..a91eed881 100644
  static int nwl_pcie_init_irq_domain(struct nwl_pcie *pcie)
  {
  	struct device *dev = pcie->dev;
-@@ -781,7 +725,6 @@ static int nwl_pcie_parse_dt(struct nwl_pcie *pcie,
+@@ -782,7 +726,6 @@ static int nwl_pcie_parse_dt(struct nwl_pcie *pcie,
  {
  	struct device *dev = pcie->dev;
  	struct resource *res;
@@ -1229,7 +1232,7 @@ index a8ae14474..a91eed881 100644
  
  	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "breg");
  	pcie->breg_base = devm_ioremap_resource(dev, res);
-@@ -809,18 +752,6 @@ static int nwl_pcie_parse_dt(struct nwl_pcie *pcie,
+@@ -810,18 +753,6 @@ static int nwl_pcie_parse_dt(struct nwl_pcie *pcie,
  	irq_set_chained_handler_and_data(pcie->irq_intx,
  					 nwl_pcie_leg_handler, pcie);
  
@@ -1248,7 +1251,7 @@ index a8ae14474..a91eed881 100644
  	return 0;
  }
  
-@@ -861,22 +792,16 @@ static int nwl_pcie_probe(struct platform_device *pdev)
+@@ -862,22 +793,16 @@ static int nwl_pcie_probe(struct platform_device *pdev)
  		return err;
  	}
  
@@ -1273,7 +1276,7 @@ index a8ae14474..a91eed881 100644
  	}
  
  	bridge->sysdata = pcie;
-@@ -886,7 +811,7 @@ static int nwl_pcie_probe(struct platform_device *pdev)
+@@ -887,7 +812,7 @@ static int nwl_pcie_probe(struct platform_device *pdev)
  		err = nwl_pcie_enable_msi(pcie);
  		if (err < 0) {
  			dev_err(dev, "failed to enable MSI support: %d\n", err);
@@ -1282,7 +1285,7 @@ index a8ae14474..a91eed881 100644
  		}
  	}
  
-@@ -894,8 +819,6 @@ static int nwl_pcie_probe(struct platform_device *pdev)
+@@ -895,8 +820,6 @@ static int nwl_pcie_probe(struct platform_device *pdev)
  	if (!err)
  		return 0;
  
@@ -1291,7 +1294,7 @@ index a8ae14474..a91eed881 100644
  err_clk:
  	clk_disable_unprepare(pcie->clk);
  	return err;
-@@ -905,7 +828,6 @@ static void nwl_pcie_remove(struct platform_device *pdev)
+@@ -906,7 +829,6 @@ static void nwl_pcie_remove(struct platform_device *pdev)
  {
  	struct nwl_pcie *pcie = platform_get_drvdata(pdev);
  

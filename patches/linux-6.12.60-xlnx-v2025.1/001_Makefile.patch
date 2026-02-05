@@ -1,11 +1,11 @@
 diff --git a/Makefile b/Makefile
-index cc59990e3..2ee3a8847 100644
+index 02c02eda6..d83d0edfa 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -2,7 +2,7 @@
  VERSION = 6
  PATCHLEVEL = 12
- SUBLEVEL = 45
+ SUBLEVEL = 60
 -EXTRAVERSION =
 +EXTRAVERSION = -zynqmp-fpga
  NAME = Baby Opossum Posse

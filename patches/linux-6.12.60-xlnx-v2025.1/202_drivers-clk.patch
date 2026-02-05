@@ -5196,7 +5196,7 @@ index 000000000..28ea3050d
 +
 +#endif /* SI5324DRV_H_ */
 diff --git a/drivers/clk/xilinx/clk-xlnx-clock-wizard.c b/drivers/clk/xilinx/clk-xlnx-clock-wizard.c
-index 7a0269bdf..bbf771448 100644
+index d2142bab5..4dd3dd0d4 100644
 --- a/drivers/clk/xilinx/clk-xlnx-clock-wizard.c
 +++ b/drivers/clk/xilinx/clk-xlnx-clock-wizard.c
 @@ -17,6 +17,7 @@
@@ -5703,7 +5703,7 @@ index 7a0269bdf..bbf771448 100644
 +						(dev,
  						 clkout_name, clk_name, 0,
  						 clk_wzrd->base,
- 						 (WZRD_CLK_CFG_REG(is_versal, 3) + i * 8),
+ 						 (WZRD_CLK_CFG_REG(is_versal, 2) + i * 8),
 @@ -1161,84 +1116,108 @@ static int clk_wzrd_probe(struct platform_device *pdev)
  						 DIV_O, &clkwzrd_lock);
  		} else {

@@ -2036,23 +2036,6 @@ index e1d61a652..9d00bb193 100644
  
  	return dma_addr;
  }
-diff --git a/drivers/gpu/drm/drm_fbdev_dma.c b/drivers/gpu/drm/drm_fbdev_dma.c
-index 6fcf2a8bf..9182f8e14 100644
---- a/drivers/gpu/drm/drm_fbdev_dma.c
-+++ b/drivers/gpu/drm/drm_fbdev_dma.c
-@@ -225,10 +225,8 @@ static int drm_fbdev_dma_driver_fbdev_probe_tail(struct drm_fb_helper *fb_helper
- 		info->flags |= FBINFO_READS_FAST; /* signal caching */
- 	info->screen_size = sizes->surface_height * fb->pitches[0];
- 	info->screen_buffer = map.vaddr;
--	if (!(info->flags & FBINFO_HIDE_SMEM_START)) {
--		if (!drm_WARN_ON(dev, is_vmalloc_addr(info->screen_buffer)))
--			info->fix.smem_start = page_to_phys(virt_to_page(info->screen_buffer));
--	}
-+	if (!(info->flags & FBINFO_HIDE_SMEM_START))
-+		info->fix.smem_start = dma_obj->dma_addr;
- 	info->fix.smem_len = info->screen_size;
- 
- 	return 0;
 diff --git a/drivers/gpu/drm/drm_fourcc.c b/drivers/gpu/drm/drm_fourcc.c
 index 3a94ca211..c7a47694e 100644
 --- a/drivers/gpu/drm/drm_fourcc.c
@@ -9303,10 +9286,10 @@ index 000000000..85afa7a14
 +}
 diff --git a/drivers/gpu/drm/xlnx/mmi_dc.h b/drivers/gpu/drm/xlnx/mmi_dc.h
 new file mode 100644
-index 000000000..44996a640
+index 000000000..3e1c6bcc7
 --- /dev/null
 +++ b/drivers/gpu/drm/xlnx/mmi_dc.h
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,170 @@
 +/* SPDX-License-Identifier: GPL-2.0 */
 +/*
 + * Multimedia Integrated Display Controller Driver
@@ -9322,18 +9305,20 @@ index 000000000..44996a640
 +#include <drm/drm_plane.h>
 +
 +#define MMI_DC_NUM_PLANES		(2)
-+#define MMI_DC_MAX_NUM_SUB_PLANES	(3)
++#define MMI_DC_NUM_CC			(3)
++#define MMI_DC_MAX_NUM_SUB_PLANES	(MMI_DC_NUM_CC)
 +#define MMI_DC_VBLANKS			(3)
 +#define MMI_DC_DPTX_PORT_0		(12)
 +#define MMI_DC_MAX_WIDTH		(4096)
 +#define MMI_DC_MAX_HEIGHT		(4096)
++#define MMI_DC_SWAP(layer)		(MMI_DC_NUM_PLANES - 1 - (layer))
 +
 +/* ----------------------------------------------------------------------------
 + * CSC Data
 + */
 +
-+#define MMI_DC_CSC_NUM_COEFFS		(9)
-+#define MMI_DC_CSC_NUM_OFFSETS		(3)
++#define MMI_DC_CSC_NUM_COEFFS		(MMI_DC_NUM_CC * MMI_DC_NUM_CC)
++#define MMI_DC_CSC_NUM_OFFSETS		(MMI_DC_NUM_CC)
 +
 +/* ----------------------------------------------------------------------------
 + * MMI DC Plane Interface
@@ -9354,7 +9339,7 @@ index 000000000..44996a640
 +#define MMI_DC_AV_CHBUF(channel)			(0x0010 + 4 * (channel))
 +#define MMI_DC_AV_BUF_OUTPUT_AUDIO_VIDEO_SELECT		(0x0070)
 +#define MMI_DC_AV_BUF_PLANE_CC_SCALE_FACTOR(layer, cc)	(0x0200 + 0x0c * \
-+							(layer) + 4 * (cc))
++							 MMI_DC_SWAP(layer) + 4 * (cc))
 +
 +#define MMI_DC_AV_CHBUF_BURST				(0x000f << 2)
 +#define MMI_DC_AV_CHBUF_FLUSH				BIT(1)
@@ -9477,10 +9462,10 @@ index 000000000..44996a640
 +#endif /* __MMI_DC_H__ */
 diff --git a/drivers/gpu/drm/xlnx/mmi_dc_kms.c b/drivers/gpu/drm/xlnx/mmi_dc_kms.c
 new file mode 100644
-index 000000000..e202461df
+index 000000000..11a46152b
 --- /dev/null
 +++ b/drivers/gpu/drm/xlnx/mmi_dc_kms.c
-@@ -0,0 +1,589 @@
+@@ -0,0 +1,595 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Multimedia Integrated Display Controller Driver
@@ -10004,6 +9989,12 @@ index 000000000..e202461df
 +	platform_set_drvdata(pdev, dc);
 +	dc->dev = &pdev->dev;
 +
++	ret = dma_set_mask_and_coherent(dc->dev, DMA_BIT_MASK(48));
++	if (ret < 0) {
++		dev_err(dc->dev, "failed to set DMA mask %d\n", ret);
++		return ret;
++	}
++
 +	dc->pixel_clk = devm_clk_get(dc->dev, "pl_vid_func_clk");
 +	if (IS_ERR(dc->pixel_clk)) {
 +		dev_dbg(dc->dev, "failed to get pl_vid_func_clk %ld\n",
@@ -10072,7 +10063,7 @@ index 000000000..e202461df
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/gpu/drm/xlnx/mmi_dc_plane.c b/drivers/gpu/drm/xlnx/mmi_dc_plane.c
 new file mode 100644
-index 000000000..e7ffca484
+index 000000000..bb4045676
 --- /dev/null
 +++ b/drivers/gpu/drm/xlnx/mmi_dc_plane.c
 @@ -0,0 +1,807 @@
@@ -10319,7 +10310,7 @@ index 000000000..e7ffca484
 +	val |= format->buf_format << MMI_DC_AV_BUF_FMT_SHIFT(plane->id);
 +	dc_write_avbuf(dc, MMI_DC_AV_BUF_FORMAT, val);
 +
-+	for (i = 0; i < MMI_DC_AV_BUF_NUM_SF; ++i) {
++	for (i = 0; i < MMI_DC_NUM_CC; ++i) {
 +		u32 reg = MMI_DC_AV_BUF_PLANE_CC_SCALE_FACTOR(plane->id, i);
 +
 +		dc_write_avbuf(dc, reg, format->sf[i]);

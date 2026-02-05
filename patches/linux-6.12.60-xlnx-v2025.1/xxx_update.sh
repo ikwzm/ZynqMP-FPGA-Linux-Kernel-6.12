@@ -1,5 +1,5 @@
 PATCH_DIR=$(cd $(dirname $0); pwd)
-BASE_PATCH_DIR="/home/ichiro/work/ZynqMP-FPGA-Linux-Kernel-6.12/patches/linux-6.12.42-xlnx-v2025.1"
+BASE_PATCH_DIR="/home/ichiro/work/ZynqMP-FPGA-Linux-Kernel-6.12/patches/linux-6.12.60-xlnx-v2025.1-update"
 dry_run=0
 verbose=1
 update=1
@@ -58,6 +58,7 @@ try_patch()
     run_command "patch -p1 < ${BASE_PATCH_DIR}/${1}"
 }
 
+update_patch 002_include.patch
 update_patch 010_arch-arm-mach-zynq.patch
 update_patch 011_arch-arm-configs.patch
 update_patch 012_arch-arm-boot-dts.patch
@@ -81,6 +82,7 @@ update_patch 212_drivers-i2c.patch
 update_patch 213_drivers-i3c.patch
 update_patch 214_drivers-iio.patch
 update_patch 216_drivers-irqchip.patch
+update_patch 217_drivers-mailbox.patch
 update_patch 218_drivers-media-common.patch
 update_patch 219_drivers-media-i2c.patch
 update_patch 220_drivers-media-mc.patch
@@ -89,7 +91,6 @@ update_patch 222_drivers-media-test-drivers.patch
 update_patch 224_drivers-media-v4l2.patch
 update_patch 225_drivers-mfd.patch
 update_patch 226_drivers-misc.patch
-update_patch 227_drivers-mmc.patch
 update_patch 228_drivers-mtd.patch
 update_patch 230_drivers-net-ethernet.patch
 update_patch 231_drivers-net-phy.patch
@@ -101,6 +102,7 @@ update_patch 238_drivers-pinctrl.patch
 update_patch 240_drivers-ptp.patch
 update_patch 241_drivers-pwm.patch
 update_patch 242_drivers-remoteproc.patch
+update_patch 243_drivers-reset.patch
 update_patch 246_drivers-soc-xilinx.patch
 update_patch 247_drivers-spi.patch
 update_patch 248_drivers-staging.patch
@@ -120,4 +122,3 @@ update_patch 273_drivers-w1.patch
 update_patch 275_drivers-xen.patch
 update_patch 301_sound-soc-xilinx.patch
 update_patch 999_other-document.patch
-

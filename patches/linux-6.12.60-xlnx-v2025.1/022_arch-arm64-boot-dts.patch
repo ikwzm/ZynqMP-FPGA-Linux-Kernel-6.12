@@ -17369,7 +17369,7 @@ index ddc74d963..e85f8c845 100644
 +	};
  };
 diff --git a/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts b/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
-index 7beedd730..a19d78e55 100644
+index 9dd63cc38..a19d78e55 100644
 --- a/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
 +++ b/arch/arm64/boot/dts/xilinx/zynqmp-zcu106-revA.dts
 @@ -613,7 +613,26 @@ i2c@4 {
@@ -17400,17 +17400,6 @@ index 7beedd730..a19d78e55 100644
  		};
  		i2c@5 {
  			#address-cells = <1>;
-@@ -808,8 +827,8 @@ conf-tx {
- 			pins = "MIO54", "MIO56", "MIO57", "MIO58", "MIO59",
- 			       "MIO60", "MIO61", "MIO62", "MIO63";
- 			bias-disable;
--			drive-strength = <4>;
--			slew-rate = <SLEW_RATE_SLOW>;
-+			drive-strength = <12>;
-+			slew-rate = <SLEW_RATE_FAST>;
- 		};
- 	};
- 
 @@ -959,14 +978,32 @@ &psgtr {
  
  &qspi {
@@ -20583,7 +20572,7 @@ index 000000000..1a99d1e08
 +	snps,usb3_lpm_capable;
 +};
 diff --git a/arch/arm64/boot/dts/xilinx/zynqmp.dtsi b/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
-index b1b31dcf6..f89565ad7 100644
+index e2ad5fb2c..441881faf 100644
 --- a/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
 +++ b/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
 @@ -18,6 +18,7 @@
@@ -20802,7 +20791,7 @@ index b1b31dcf6..f89565ad7 100644
  		};
  	};
  
-@@ -834,6 +857,78 @@ ocm: memory-controller@ff960000 {
+@@ -838,6 +861,78 @@ ocm: memory-controller@ff960000 {
  			interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
  		};
  
@@ -20881,7 +20870,7 @@ index b1b31dcf6..f89565ad7 100644
  		pcie: pcie@fd0e0000 {
  			compatible = "xlnx,nwl-pcie-2.11";
  			status = "disabled";
-@@ -1157,7 +1252,6 @@ lpd_watchdog: watchdog@ff150000 {
+@@ -1161,7 +1256,6 @@ lpd_watchdog: watchdog@ff150000 {
  
  		xilinx_ams: ams@ffa50000 {
  			compatible = "xlnx,zynqmp-ams";
@@ -20889,7 +20878,7 @@ index b1b31dcf6..f89565ad7 100644
  			interrupt-parent = <&gic>;
  			interrupts = <GIC_SPI 56 IRQ_TYPE_LEVEL_HIGH>;
  			reg = <0x0 0xffa50000 0x0 0x800>;
-@@ -1207,32 +1301,35 @@ zynqmp_dpsub: display@fd4a0000 {
+@@ -1211,32 +1305,35 @@ zynqmp_dpsub: display@fd4a0000 {
  				      "dp_vtc_pixel_clk_in";
  			power-domains = <&zynqmp_firmware PD_DP>;
  			resets = <&zynqmp_reset ZYNQMP_RESET_DP>;

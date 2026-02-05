@@ -2553,32 +2553,22 @@ index 000000000..4ed542354
 +MODULE_LICENSE("GPL");
 +MODULE_AUTHOR("Nava kishore Manne <navam@xilinx.com>");
 diff --git a/drivers/crypto/xilinx/zynqmp-sha.c b/drivers/crypto/xilinx/zynqmp-sha.c
-index 9b5345068..529eb742d 100644
+index 9b5345068..2c55c7c7a 100644
 --- a/drivers/crypto/xilinx/zynqmp-sha.c
 +++ b/drivers/crypto/xilinx/zynqmp-sha.c
-@@ -2,23 +2,30 @@
+@@ -2,7 +2,10 @@
  /*
   * Xilinx ZynqMP SHA Driver.
   * Copyright (c) 2022 Xilinx Inc.
 + * Copyright (C) 2022-2023, Advanced Micro Devices, Inc.
   */
-+#include <linux/cacheflush.h>
++
 +#include <crypto/engine.h>
  #include <crypto/hash.h>
  #include <crypto/internal/hash.h>
  #include <crypto/sha3.h>
--#include <linux/cacheflush.h>
--#include <linux/cleanup.h>
-+#include <linux/crypto.h>
- #include <linux/device.h>
- #include <linux/dma-mapping.h>
--#include <linux/err.h>
- #include <linux/firmware/xlnx-zynqmp.h>
-+#include <linux/init.h>
- #include <linux/io.h>
- #include <linux/kernel.h>
- #include <linux/module.h>
--#include <linux/spinlock.h>
+@@ -18,7 +21,13 @@
+ #include <linux/spinlock.h>
  #include <linux/platform_device.h>
  
 +#define CONTINUE_PACKET		BIT(31)
@@ -2591,7 +2581,7 @@ index 9b5345068..529eb742d 100644
  #define ZYNQMP_DMA_ALLOC_FIXED_SIZE	0x1000U
  
  enum zynqmp_sha_op {
-@@ -27,207 +34,359 @@ enum zynqmp_sha_op {
+@@ -27,207 +36,359 @@ enum zynqmp_sha_op {
  	ZYNQMP_SHA3_FINAL = 4,
  };
  
@@ -2709,13 +2699,13 @@ index 9b5345068..529eb742d 100644
 +	struct zynqmp_sha_desc_ctx *dctx = ahash_request_ctx(req);
 +	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 +	struct zynqmp_sha_tfm_ctx *tctx = crypto_ahash_ctx(tfm);
- 
--	return crypto_shash_update(&dctx->fbk_req, data, length);
++
 +	ahash_request_set_tfm(&dctx->fallback_req, tctx->fbk_tfm);
 +	dctx->fallback_req.base.flags = req->base.flags &
 +		CRYPTO_TFM_REQ_MAY_SLEEP;
 +	dctx->fallback_req.result = req->result;
-+
+ 
+-	return crypto_shash_update(&dctx->fbk_req, data, length);
 +	return crypto_ahash_final(&dctx->fallback_req);
  }
  
@@ -2726,7 +2716,8 @@ index 9b5345068..529eb742d 100644
 +	struct zynqmp_sha_desc_ctx *dctx = ahash_request_ctx(req);
 +	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 +	struct zynqmp_sha_tfm_ctx *tctx = crypto_ahash_ctx(tfm);
-+
+ 
+-	return crypto_shash_final(&dctx->fbk_req, out);
 +	ahash_request_set_tfm(&dctx->fallback_req, tctx->fbk_tfm);
 +	dctx->fallback_req.base.flags = req->base.flags &
 +		CRYPTO_TFM_REQ_MAY_SLEEP;
@@ -2734,8 +2725,7 @@ index 9b5345068..529eb742d 100644
 +	dctx->fallback_req.nbytes = req->nbytes;
 +	dctx->fallback_req.src = req->src;
 +	dctx->fallback_req.result = req->result;
- 
--	return crypto_shash_final(&dctx->fbk_req, out);
++
 +	return crypto_ahash_finup(&dctx->fallback_req);
  }
  
@@ -2746,12 +2736,12 @@ index 9b5345068..529eb742d 100644
 +	struct zynqmp_sha_desc_ctx *dctx = ahash_request_ctx(req);
 +	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 +	struct zynqmp_sha_tfm_ctx *tctx = crypto_ahash_ctx(tfm);
- 
--	return crypto_shash_finup(&dctx->fbk_req, data, length, out);
++
 +	ahash_request_set_tfm(&dctx->fallback_req, tctx->fbk_tfm);
 +	dctx->fallback_req.base.flags = req->base.flags &
 +		CRYPTO_TFM_REQ_MAY_SLEEP;
-+
+ 
+-	return crypto_shash_finup(&dctx->fbk_req, data, length, out);
 +	return crypto_ahash_import(&dctx->fallback_req, in);
  }
  
@@ -2763,13 +2753,13 @@ index 9b5345068..529eb742d 100644
 +	struct zynqmp_sha_desc_ctx *dctx = ahash_request_ctx(req);
 +	struct crypto_ahash *tfm = crypto_ahash_reqtfm(req);
 +	struct zynqmp_sha_tfm_ctx *tctx = crypto_ahash_ctx(tfm);
-+
-+	ahash_request_set_tfm(&dctx->fallback_req, tctx->fbk_tfm);
-+	dctx->fallback_req.base.flags = req->base.flags &
-+		CRYPTO_TFM_REQ_MAY_SLEEP;
  
 -	dctx->fbk_req.tfm = tctx->fbk_tfm;
 -	return crypto_shash_import(&dctx->fbk_req, in);
++	ahash_request_set_tfm(&dctx->fallback_req, tctx->fbk_tfm);
++	dctx->fallback_req.base.flags = req->base.flags &
++		CRYPTO_TFM_REQ_MAY_SLEEP;
++
 +	return crypto_ahash_export(&dctx->fallback_req, out);
  }
  
@@ -2836,7 +2826,9 @@ index 9b5345068..529eb742d 100644
  
 -static int zynqmp_sha_digest(struct shash_desc *desc, const u8 *data, unsigned int len, u8 *out)
 +static int versal_sha_digest(struct ahash_request *req)
-+{
+ {
+-	scoped_guard(spinlock_bh, &zynqmp_sha_lock)
+-		return __zynqmp_sha_digest(desc, data, len, out);
 +	int update_size, ret, flag = FIRST_PACKET;
 +	unsigned int processed = 0;
 +	unsigned int remaining_len;
@@ -2884,12 +2876,12 @@ index 9b5345068..529eb742d 100644
 +	local_bh_enable();
 +
 +	return 0;
-+}
-+
+ }
+ 
+-static struct zynqmp_sha_drv_ctx sha3_drv_ctx = {
+-	.sha3_384 = {
 +static int handle_versal_sha_engine_req(struct crypto_engine *engine, void *req)
- {
--	scoped_guard(spinlock_bh, &zynqmp_sha_lock)
--		return __zynqmp_sha_digest(desc, data, len, out);
++{
 +	int err;
 +
 +	err = versal_sha_digest(req);
@@ -2898,10 +2890,8 @@ index 9b5345068..529eb742d 100644
 +	local_bh_enable();
 +
 +	return 0;
- }
- 
--static struct zynqmp_sha_drv_ctx sha3_drv_ctx = {
--	.sha3_384 = {
++}
++
 +static struct xilinx_sha_drv_ctx zynqmp_sha3_drv_ctx = {
 +	.sha3_384.base = {
  		.init = zynqmp_sha_init,
@@ -3041,7 +3031,7 @@ index 9b5345068..529eb742d 100644
  	}
  
  	fbuf = dma_alloc_coherent(dev, SHA3_384_DIGEST_SIZE, &final_dma_addr, GFP_KERNEL);
-@@ -236,24 +395,47 @@ static int zynqmp_sha_probe(struct platform_device *pdev)
+@@ -236,24 +397,47 @@ static int zynqmp_sha_probe(struct platform_device *pdev)
  		goto err_mem;
  	}
  
@@ -3097,7 +3087,7 @@ index 9b5345068..529eb742d 100644
  }
  
  static struct platform_driver zynqmp_sha_driver = {
-@@ -264,7 +446,35 @@ static struct platform_driver zynqmp_sha_driver = {
+@@ -264,7 +448,35 @@ static struct platform_driver zynqmp_sha_driver = {
  	},
  };
  
