@@ -30,6 +30,7 @@ For Linux Kernel image and Debian Packages, please refer to the respective relea
 
 | Version  | Local Name          | Build Version | Release Tag |
 |:---------|:--------------------|:--------------|:------------|
+| 6.12.60  | zynqmp-fpga-generic | 1             | [6.12.60-zynqmp-fpga-generic-1](https://github.com/ikwzm/ZynqMP-FPGA-Linux-Kernel-6.12/tree/6.12.60-zynqmp-fpga-generic-1) |
 | 6.12.45  | zynqmp-fpga-generic | 1             | [6.12.45-zynqmp-fpga-generic-1](https://github.com/ikwzm/ZynqMP-FPGA-Linux-Kernel-6.12/tree/6.12.45-zynqmp-fpga-generic-1) |
 | 6.12.42  | zynqmp-fpga-generic | 1             | [6.12.42-zynqmp-fpga-generic-1](https://github.com/ikwzm/ZynqMP-FPGA-Linux-Kernel-6.12/tree/6.12.42-zynqmp-fpga-generic-1) |
 | 6.12.27  | zynqmp-fpga-generic | 3             | [6.12.27-zynqmp-fpga-generic-3](https://github.com/ikwzm/ZynqMP-FPGA-Linux-Kernel-6.12/tree/6.12.27-zynqmp-fpga-generic-3) |
@@ -40,7 +41,7 @@ Download
 ------------------------------------------------------------------------------------
 
 ```console
-shell$ export RELEASE_TAG=6.12.45-zynqmp-fpga-generic-1
+shell$ export RELEASE_TAG=6.12.60-zynqmp-fpga-generic-1
 shell$ wget https://github.com/ikwzm/ZynqMP-FPGA-Linux-Kernel-6.12/archive/refs/tags/$RELEASE_TAG.tar.gz
 shell$ tar xfz $RELEASE_TAG.tar.gz
 shell$ mv ZynqMP-FPGA-Linux-Kernel-6.12-$RELEASE_TAG ZynqMP-FPGA-Linux-Kernel-$RELEASE_TAG
