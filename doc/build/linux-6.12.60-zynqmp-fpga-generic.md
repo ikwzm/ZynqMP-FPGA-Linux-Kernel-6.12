@@ -90,8 +90,8 @@ shell$ git commit -m "[add] zynqmp_fpga_generic_defconfig to arch/arm64/configs"
 ### Create tag and .version
 
 ```console
-shell$ git tag -a v6.12.60-zynqmp-fpga -m "release v6.12.60-zynqmp-fpga-generic-1"
-shell$ echo 0 > .version
+shell$ git tag -a v6.12.60-zynqmp-fpga -m "release v6.12.60-zynqmp-fpga-generic-2"
+shell$ echo 1 > .version
 ```
 
 ## Build
