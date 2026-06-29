@@ -116,7 +116,7 @@ index 000000000..b7643a138
 +		interrupt-names = "interrupt1", "interrupt2", "interrupt3";
 +	};
 diff --git a/drivers/soc/xilinx/xlnx_event_manager.c b/drivers/soc/xilinx/xlnx_event_manager.c
-index 85df6b9c0..adf26f023 100644
+index a572d15f6..6074d59c0 100644
 --- a/drivers/soc/xilinx/xlnx_event_manager.c
 +++ b/drivers/soc/xilinx/xlnx_event_manager.c
 @@ -3,12 +3,15 @@
@@ -170,7 +170,7 @@ index 85df6b9c0..adf26f023 100644
  	}
  
 diff --git a/drivers/soc/xilinx/zynqmp_power.c b/drivers/soc/xilinx/zynqmp_power.c
-index 411d33f2f..5be6d3ece 100644
+index ae59bf166..5f4d12aba 100644
 --- a/drivers/soc/xilinx/zynqmp_power.c
 +++ b/drivers/soc/xilinx/zynqmp_power.c
 @@ -319,7 +319,7 @@ static int zynqmp_pm_probe(struct platform_device *pdev)

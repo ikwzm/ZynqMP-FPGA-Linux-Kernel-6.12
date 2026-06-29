@@ -293,7 +293,7 @@ index 000000000..aec23976c
 +MODULE_DESCRIPTION("Xilinx PCS/PMA PHY driver");
 +MODULE_LICENSE("GPL");
 diff --git a/include/linux/phy.h b/include/linux/phy.h
-index dfc7b97f9..b9ab1cfc5 100644
+index 49283facf..816ffc373 100644
 --- a/include/linux/phy.h
 +++ b/include/linux/phy.h
 @@ -124,6 +124,9 @@ extern const int phy_10gbit_features_array[1];
@@ -316,7 +316,7 @@ index dfc7b97f9..b9ab1cfc5 100644
  	PHY_INTERFACE_MODE_USXGMII,
  	/* 10GBASE-KR - with Clause 73 AN */
  	PHY_INTERFACE_MODE_10GKR,
-@@ -283,6 +289,12 @@ static inline const char *phy_modes(phy_interface_t interface)
+@@ -293,6 +299,12 @@ static inline const char *phy_modes(phy_interface_t interface)
  		return "10gbase-r";
  	case PHY_INTERFACE_MODE_25GBASER:
  		return "25gbase-r";

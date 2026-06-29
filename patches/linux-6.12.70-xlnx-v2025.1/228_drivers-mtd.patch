@@ -4489,7 +4489,7 @@ index fdc411f2a..2d9fd305d 100644
  
  	mtd->_lock = spi_nor_lock;
 diff --git a/drivers/mtd/spi-nor/winbond.c b/drivers/mtd/spi-nor/winbond.c
-index 9f7ce5763..d578d5c4a 100644
+index 9d9b8ce4d..d578d5c4a 100644
 --- a/drivers/mtd/spi-nor/winbond.c
 +++ b/drivers/mtd/spi-nor/winbond.c
 @@ -10,6 +10,7 @@
@@ -4598,7 +4598,7 @@ index 9f7ce5763..d578d5c4a 100644
  		.no_sfdp_flags = SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  	}, {
  		.id = SNOR_ID(0xef, 0x70, 0x19),
-@@ -248,12 +300,31 @@ static const struct flash_info winbond_nor_parts[] = {
+@@ -248,36 +300,31 @@ static const struct flash_info winbond_nor_parts[] = {
  		.id = SNOR_ID(0xef, 0x80, 0x19),
  		.name = "w25q256jwm",
  		.size = SZ_32M,
@@ -4610,8 +4610,26 @@ index 9f7ce5763..d578d5c4a 100644
  		.id = SNOR_ID(0xef, 0x80, 0x20),
  		.name = "w25q512nwm",
  		.otp = SNOR_OTP(256, 3, 0x1000, 0x1000),
-+	}, {
-+		.id = SNOR_ID(0xef, 0x80, 0x22),
+ 	}, {
+-		/* W25Q01NWxxIQ */
+-		.id = SNOR_ID(0xef, 0x60, 0x21),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
+-	}, {
+-		/* W25Q01NWxxIM */
+-		.id = SNOR_ID(0xef, 0x80, 0x21),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
+-	}, {
+-		/* W25Q02NWxxIM */
+ 		.id = SNOR_ID(0xef, 0x80, 0x22),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
+-	}, {
+-		/* W25H512NWxxAM */
+-		.id = SNOR_ID(0xef, 0xa0, 0x20),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
+-	}, {
+-		/* W25H01NWxxAM */
+-		.id = SNOR_ID(0xef, 0xa0, 0x21),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
 +		.name = "w25q02nw",
 +		.size = SZ_8M,
 +		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 |
@@ -4619,7 +4637,10 @@ index 9f7ce5763..d578d5c4a 100644
 +		.no_sfdp_flags = SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
 +		.fixup_flags = SPI_NOR_4B_OPCODES,
 +		.fixups = &w25q02_fixups,
-+	}, {
+ 	}, {
+-		/* W25H02NWxxAM */
+-		.id = SNOR_ID(0xef, 0xa0, 0x22),
+-		.flags = SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB | SPI_NOR_TB_SR_BIT6 | SPI_NOR_4BIT_BP,
 +		.id = SNOR_ID(0xef, 0x90, 0x22),
 +		.name = "w25q02nw",
 +		.size = SZ_8M,
@@ -4631,7 +4652,7 @@ index 9f7ce5763..d578d5c4a 100644
  	},
  };
  
-@@ -331,7 +402,7 @@ static const struct spi_nor_otp_ops winbond_nor_otp_ops = {
+@@ -355,7 +402,7 @@ static const struct spi_nor_otp_ops winbond_nor_otp_ops = {
  
  static int winbond_nor_late_init(struct spi_nor *nor)
  {

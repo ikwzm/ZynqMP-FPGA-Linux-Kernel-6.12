@@ -133,7 +133,7 @@ index 9bf0fb17a..c3d2866f6 100644
              # I2C Touch-Screen Controller
            - ti,tsc2003
 diff --git a/drivers/spi/spi-cadence-quadspi.c b/drivers/spi/spi-cadence-quadspi.c
-index 06e43b184..979ebc25a 100644
+index e1d64a9a3..6d4b4fb49 100644
 --- a/drivers/spi/spi-cadence-quadspi.c
 +++ b/drivers/spi/spi-cadence-quadspi.c
 @@ -29,9 +29,11 @@
@@ -643,9 +643,9 @@ index 06e43b184..979ebc25a 100644
  
  	reinit_completion(&cqspi->transfer_complete);
  	writel(CQSPI_REG_INDIRECTRD_START_MASK,
-@@ -770,7 +1107,10 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
- 		if (cqspi->slow_sram)
- 			writel(0x0, reg_base + CQSPI_REG_IRQMASK);
+@@ -779,7 +1116,10 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
+ 		if (use_irq)
+ 			reinit_completion(&cqspi->transfer_complete);
  
 -		bytes_to_read = cqspi_get_rd_sram_level(cqspi);
 +		if (req_bytes > (threshold_val + cqspi->fifo_width))
@@ -655,7 +655,7 @@ index 06e43b184..979ebc25a 100644
  
  		if (ret && bytes_to_read == 0) {
  			dev_err(dev, "Indirect read timeout, no bytes\n");
-@@ -779,26 +1119,47 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
+@@ -788,26 +1128,47 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
  
  		while (bytes_to_read != 0) {
  			unsigned int word_remain = round_down(remaining, 4);
@@ -713,7 +713,7 @@ index 06e43b184..979ebc25a 100644
  		}
  
  		if (use_irq && remaining > 0) {
-@@ -834,6 +1195,25 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
+@@ -842,6 +1203,25 @@ static int cqspi_indirect_read_execute(struct cqspi_flash_pdata *f_pdata,
  	return ret;
  }
  
@@ -739,7 +739,7 @@ index 06e43b184..979ebc25a 100644
  static void cqspi_controller_enable(struct cqspi_st *cqspi, bool enable)
  {
  	void __iomem *reg_base = cqspi->iobase;
-@@ -866,8 +1246,11 @@ static int cqspi_versal_indirect_read_dma(struct cqspi_flash_pdata *f_pdata,
+@@ -874,8 +1254,11 @@ static int cqspi_versal_indirect_read_dma(struct cqspi_flash_pdata *f_pdata,
  	bytes_rem = n_rx % 4;
  	bytes_to_dma = (n_rx - bytes_rem);
  
@@ -752,7 +752,7 @@ index 06e43b184..979ebc25a 100644
  
  	ret = zynqmp_pm_ospi_mux_select(cqspi->pd_dev_id, PM_OSPI_MUX_SEL_DMA);
  	if (ret)
-@@ -1049,9 +1432,14 @@ static int cqspi_indirect_write_execute(struct cqspi_flash_pdata *f_pdata,
+@@ -1057,9 +1440,14 @@ static int cqspi_indirect_write_execute(struct cqspi_flash_pdata *f_pdata,
  	unsigned int remaining = n_tx;
  	unsigned int write_bytes;
  	int ret;
@@ -768,7 +768,7 @@ index 06e43b184..979ebc25a 100644
  
  	/* Clear all interrupts. */
  	writel(CQSPI_IRQ_STATUS_MASK, reg_base + CQSPI_REG_IRQSTATUS);
-@@ -1094,7 +1482,7 @@ static int cqspi_indirect_write_execute(struct cqspi_flash_pdata *f_pdata,
+@@ -1102,7 +1490,7 @@ static int cqspi_indirect_write_execute(struct cqspi_flash_pdata *f_pdata,
  		if (mod_bytes) {
  			unsigned int temp = 0xFFFFFFFF;
  
@@ -777,7 +777,7 @@ index 06e43b184..979ebc25a 100644
  			iowrite32(temp, cqspi->ahb_base);
  			txbuf += mod_bytes;
  		}
-@@ -1441,6 +1829,7 @@ static int cqspi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
+@@ -1449,6 +1837,7 @@ static int cqspi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
  	int ret;
  	struct cqspi_st *cqspi = spi_controller_get_devdata(mem->spi->controller);
  	struct device *dev = &cqspi->pdev->dev;
@@ -785,7 +785,7 @@ index 06e43b184..979ebc25a 100644
  
  	ret = pm_runtime_resume_and_get(dev);
  	if (ret) {
-@@ -1448,6 +1837,31 @@ static int cqspi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
+@@ -1456,6 +1845,31 @@ static int cqspi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
  		return ret;
  	}
  
@@ -817,7 +817,7 @@ index 06e43b184..979ebc25a 100644
  	ret = cqspi_mem_process(mem, op);
  
  	pm_runtime_mark_last_busy(dev);
-@@ -1604,6 +2018,22 @@ static void cqspi_controller_init(struct cqspi_st *cqspi)
+@@ -1612,6 +2026,22 @@ static void cqspi_controller_init(struct cqspi_st *cqspi)
  	}
  }
  
@@ -840,7 +840,7 @@ index 06e43b184..979ebc25a 100644
  static void cqspi_controller_detect_fifo_depth(struct cqspi_st *cqspi)
  {
  	struct device *dev = &cqspi->pdev->dev;
-@@ -1676,16 +2106,31 @@ static int cqspi_setup_flash(struct cqspi_st *cqspi)
+@@ -1684,16 +2114,31 @@ static int cqspi_setup_flash(struct cqspi_st *cqspi)
  	struct platform_device *pdev = cqspi->pdev;
  	struct device *dev = &pdev->dev;
  	struct cqspi_flash_pdata *f_pdata;
@@ -874,7 +874,7 @@ index 06e43b184..979ebc25a 100644
  		if (cs >= cqspi->num_chipselect) {
  			dev_err(dev, "Chip select %d out of range.\n", cs);
  			return -EINVAL;
-@@ -1818,6 +2263,7 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1826,6 +2271,7 @@ static int cqspi_probe(struct platform_device *pdev)
  	cqspi->ahb_size = resource_size(res_ahb);
  
  	init_completion(&cqspi->transfer_complete);
@@ -882,7 +882,7 @@ index 06e43b184..979ebc25a 100644
  
  	/* Obtain IRQ line. */
  	irq = platform_get_irq(pdev, 0);
-@@ -1900,11 +2346,13 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1908,11 +2354,13 @@ static int cqspi_probe(struct platform_device *pdev)
  		if (ddata->quirks & CQSPI_DISABLE_STIG_MODE)
  			cqspi->disable_stig_mode = true;
  
@@ -898,7 +898,7 @@ index 06e43b184..979ebc25a 100644
  		}
  	}
  
-@@ -1919,9 +2367,12 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1927,9 +2375,12 @@ static int cqspi_probe(struct platform_device *pdev)
  	cqspi_controller_enable(cqspi, 0);
  	cqspi_controller_detect_fifo_depth(cqspi);
  	cqspi_controller_init(cqspi);
@@ -911,7 +911,7 @@ index 06e43b184..979ebc25a 100644
  
  	ret = cqspi_setup_flash(cqspi);
  	if (ret) {
-@@ -1931,6 +2382,9 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1939,6 +2390,9 @@ static int cqspi_probe(struct platform_device *pdev)
  
  	host->num_chipselect = cqspi->num_chipselect;
  
@@ -921,7 +921,7 @@ index 06e43b184..979ebc25a 100644
  	if (cqspi->use_direct_mode) {
  		ret = cqspi_request_mmap_dma(cqspi);
  		if (ret == -EPROBE_DEFER)
-@@ -1987,6 +2441,17 @@ static void cqspi_remove(struct platform_device *pdev)
+@@ -1997,6 +2451,17 @@ static void cqspi_remove(struct platform_device *pdev)
  static int cqspi_runtime_suspend(struct device *dev)
  {
  	struct cqspi_st *cqspi = dev_get_drvdata(dev);
@@ -939,7 +939,7 @@ index 06e43b184..979ebc25a 100644
  
  	cqspi_controller_enable(cqspi, 0);
  	clk_disable_unprepare(cqspi->clk);
-@@ -2030,6 +2495,22 @@ static int cqspi_resume(struct device *dev)
+@@ -2040,6 +2505,22 @@ static int cqspi_resume(struct device *dev)
  		dev_err(dev, "pm_runtime_force_resume failed on resume\n");
  		return ret;
  	}
@@ -962,7 +962,7 @@ index 06e43b184..979ebc25a 100644
  
  	return spi_controller_resume(cqspi->host);
  }
-@@ -2065,7 +2546,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
+@@ -2075,7 +2556,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
  
  static const struct cqspi_driver_platdata versal_ospi = {
  	.hwcaps_mask = CQSPI_SUPPORTS_OCTAL,
@@ -982,7 +982,7 @@ index 06e43b184..979ebc25a 100644
  	.indirect_read_dma = cqspi_versal_indirect_read_dma,
  	.get_dma_status = cqspi_get_versal_dma_status,
  };
-@@ -2122,6 +2614,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
+@@ -2132,6 +2624,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
  		.compatible = "mobileye,eyeq5-ospi",
  		.data = &mobileye_eyeq5_ospi,
  	},
@@ -994,19 +994,19 @@ index 06e43b184..979ebc25a 100644
  };
  
 diff --git a/drivers/spi/spi-mem.c b/drivers/spi/spi-mem.c
-index 17b8baf74..edc2bf274 100644
+index 96374afd0..cdccac4ed 100644
 --- a/drivers/spi/spi-mem.c
 +++ b/drivers/spi/spi-mem.c
-@@ -431,6 +431,7 @@ int spi_mem_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
+@@ -449,6 +449,7 @@ int spi_mem_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
  		xfers[xferpos].tx_buf = tmpbuf + op->addr.nbytes + 1;
  		xfers[xferpos].len = op->dummy.nbytes;
  		xfers[xferpos].tx_nbits = op->dummy.buswidth;
 +		xfers[xferpos].dummy = op->dummy.nbytes * 8;
  		xfers[xferpos].dummy_data = 1;
+ 		xfers[xferpos].speed_hz = op->max_freq;
  		spi_message_add_tail(&xfers[xferpos], &msg);
- 		xferpos++;
 diff --git a/drivers/spi/spi-xilinx.c b/drivers/spi/spi-xilinx.c
-index 779532842..a0268ee65 100644
+index f5e41813b..a0268ee65 100644
 --- a/drivers/spi/spi-xilinx.c
 +++ b/drivers/spi/spi-xilinx.c
 @@ -1,6 +1,6 @@
@@ -1495,7 +1495,7 @@ index 779532842..a0268ee65 100644
 -
 -		/* Read out all the data from the Rx FIFO */
 -		rx_words = n_words;
--		stalled = 10;
+-		stalled = 32;
 -		while (rx_words) {
 -			if (rx_words == n_words && !(stalled--) &&
 -			    !(sr & XSPI_SR_TX_EMPTY_MASK) &&
@@ -2735,7 +2735,7 @@ index 63b25d929..b306ef26b 100644
  }
  
 diff --git a/include/linux/spi/spi-mem.h b/include/linux/spi/spi-mem.h
-index f866d5c8e..a1a08f458 100644
+index c7a7719c2..de250d25b 100644
 --- a/include/linux/spi/spi-mem.h
 +++ b/include/linux/spi/spi-mem.h
 @@ -55,6 +55,8 @@
@@ -2747,7 +2747,7 @@ index f866d5c8e..a1a08f458 100644
  /**
   * enum spi_mem_data_dir - describes the direction of a SPI memory data
   *			   transfer from the controller perspective
-@@ -201,6 +203,9 @@ struct spi_mem {
+@@ -213,6 +215,9 @@ struct spi_mem {
  	struct spi_device *spi;
  	void *drvpriv;
  	const char *name;

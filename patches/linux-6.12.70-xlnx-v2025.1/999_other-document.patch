@@ -1,5 +1,5 @@
 diff --git a/MAINTAINERS b/MAINTAINERS
-index d0f18fdba..d0a51eee4 100644
+index d765c62c8..1cfb6cd9c 100644
 --- a/MAINTAINERS
 +++ b/MAINTAINERS
 @@ -1099,6 +1099,26 @@ F:	drivers/gpu/drm/amd/include/vi_structs.h
@@ -131,7 +131,7 @@ index d0f18fdba..d0a51eee4 100644
  SIANO DVB DRIVER
  M:	Mauro Carvalho Chehab <mchehab@kernel.org>
  L:	linux-media@vger.kernel.org
-@@ -23768,6 +23846,12 @@ F:	Documentation/devicetree/bindings/ufs/
+@@ -23763,6 +23841,12 @@ F:	Documentation/devicetree/bindings/ufs/
  F:	Documentation/scsi/ufs.rst
  F:	drivers/ufs/core/
  
@@ -144,7 +144,7 @@ index d0f18fdba..d0a51eee4 100644
  UNIVERSAL FLASH STORAGE HOST CONTROLLER DRIVER DWC HOOKS
  M:	Pedro Sousa <pedrom.sousa@synopsys.com>
  L:	linux-scsi@vger.kernel.org
-@@ -24158,6 +24242,11 @@ F:	arch/um/
+@@ -24153,6 +24237,11 @@ F:	arch/um/
  F:	arch/x86/um/
  F:	fs/hostfs/
  
@@ -156,7 +156,7 @@ index d0f18fdba..d0a51eee4 100644
  USERSPACE COPYIN/COPYOUT (UIOVEC)
  M:	Alexander Viro <viro@zeniv.linux.org.uk>
  S:	Maintained
-@@ -24180,6 +24269,16 @@ F:	Documentation/driver-api/uio-howto.rst
+@@ -24175,6 +24264,16 @@ F:	Documentation/driver-api/uio-howto.rst
  F:	drivers/uio/
  F:	include/linux/uio_driver.h
  
@@ -173,7 +173,7 @@ index d0f18fdba..d0a51eee4 100644
  UTIL-LINUX PACKAGE
  M:	Karel Zak <kzak@redhat.com>
  L:	util-linux@vger.kernel.org
-@@ -25381,18 +25480,61 @@ F:	include/uapi/linux/dqblk_xfs.h
+@@ -25376,18 +25475,61 @@ F:	include/uapi/linux/dqblk_xfs.h
  F:	include/uapi/linux/fsmap.h
  
  XILINX AMS DRIVER
@@ -236,7 +236,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX CAN DRIVER
  M:	Appana Durga Kedareswara rao <appana.durga.rao@xilinx.com>
  L:	linux-can@vger.kernel.org
-@@ -25400,12 +25542,71 @@ S:	Maintained
+@@ -25395,12 +25537,71 @@ S:	Maintained
  F:	Documentation/devicetree/bindings/net/can/xilinx,can.yaml
  F:	drivers/net/can/xilinx_can.c
  
@@ -308,7 +308,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX GPIO DRIVER
  M:	Shubhrajyoti Datta <shubhrajyoti.datta@amd.com>
  R:	Srinivas Neeli <srinivas.neeli@amd.com>
-@@ -25421,6 +25622,97 @@ L:	netdev@vger.kernel.org
+@@ -25416,6 +25617,97 @@ L:	netdev@vger.kernel.org
  S:	Orphan
  F:	drivers/net/ethernet/xilinx/ll_temac*
  
@@ -406,7 +406,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX PWM DRIVER
  M:	Sean Anderson <sean.anderson@seco.com>
  S:	Maintained
-@@ -25438,6 +25730,104 @@ F:	drivers/misc/Makefile
+@@ -25433,6 +25725,104 @@ F:	drivers/misc/Makefile
  F:	drivers/misc/xilinx_sdfec.c
  F:	include/uapi/misc/xilinx_sdfec.h
  
@@ -511,7 +511,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX UARTLITE SERIAL DRIVER
  M:	Peter Korsgaard <jacmet@sunsite.dk>
  L:	linux-serial@vger.kernel.org
-@@ -25453,6 +25843,14 @@ F:	Documentation/devicetree/bindings/media/xilinx/
+@@ -25448,6 +25838,14 @@ F:	Documentation/devicetree/bindings/media/xilinx/
  F:	drivers/media/platform/xilinx/
  F:	include/uapi/linux/xilinx-v4l2-controls.h
  
@@ -526,7 +526,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX VERSAL EDAC DRIVER
  M:	Shubhrajyoti Datta <shubhrajyoti.datta@amd.com>
  M:	Sai Krishna Potthuri <sai.krishna.potthuri@amd.com>
-@@ -25481,6 +25879,13 @@ F:	drivers/dma/xilinx/xdma.c
+@@ -25476,6 +25874,13 @@ F:	drivers/dma/xilinx/xdma.c
  F:	include/linux/dma/amd_xdma.h
  F:	include/linux/platform_data/amd_xdma.h
  
@@ -540,7 +540,7 @@ index d0f18fdba..d0a51eee4 100644
  XILINX ZYNQMP DPDMA DRIVER
  M:	Laurent Pinchart <laurent.pinchart@ideasonboard.com>
  L:	dmaengine@vger.kernel.org
-@@ -25504,19 +25909,46 @@ T:	git https://github.com/Xilinx/linux-xlnx.git
+@@ -25499,19 +25904,46 @@ T:	git https://github.com/Xilinx/linux-xlnx.git
  F:	Documentation/devicetree/bindings/phy/xlnx,zynqmp-psgtr.yaml
  F:	drivers/phy/xilinx/phy-zynqmp.c
  

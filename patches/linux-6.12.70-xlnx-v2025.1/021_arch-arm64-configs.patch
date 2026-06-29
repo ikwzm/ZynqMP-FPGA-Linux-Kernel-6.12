@@ -1,8 +1,8 @@
 diff --git a/arch/arm64/configs/defconfig b/arch/arm64/configs/defconfig
-index f988dd79a..ba4de63ea 100644
+index 5c03cf0f8..aef54c368 100644
 --- a/arch/arm64/configs/defconfig
 +++ b/arch/arm64/configs/defconfig
-@@ -1394,6 +1394,7 @@ CONFIG_QCOM_SYSMON=m
+@@ -1393,6 +1393,7 @@ CONFIG_QCOM_SYSMON=m
  CONFIG_QCOM_WCNSS_PIL=m
  CONFIG_TI_K3_DSP_REMOTEPROC=m
  CONFIG_TI_K3_R5_REMOTEPROC=m

@@ -2164,10 +2164,10 @@ index d6550b54f..ac82b0e1f 100644
  		return ERR_PTR(-EINVAL);
  	}
 diff --git a/drivers/gpu/drm/panel/panel-simple.c b/drivers/gpu/drm/panel/panel-simple.c
-index 82db3daf4..a74d521b4 100644
+index 32d876f66..3428dd2ea 100644
 --- a/drivers/gpu/drm/panel/panel-simple.c
 +++ b/drivers/gpu/drm/panel/panel-simple.c
-@@ -5162,6 +5162,33 @@ static const struct panel_desc_dsi auo_b080uan01 = {
+@@ -5163,6 +5163,33 @@ static const struct panel_desc_dsi auo_b080uan01 = {
  	.lanes = 4,
  };
  
@@ -2201,7 +2201,7 @@ index 82db3daf4..a74d521b4 100644
  static const struct drm_display_mode boe_tv080wum_nl0_mode = {
  	.clock = 160000,
  	.hdisplay = 1200,
-@@ -5340,6 +5367,9 @@ static const struct of_device_id dsi_of_match[] = {
+@@ -5341,6 +5368,9 @@ static const struct of_device_id dsi_of_match[] = {
  	{
  		.compatible = "auo,b080uan01",
  		.data = &auo_b080uan01
@@ -33847,10 +33847,10 @@ index 1e2b25e20..b781b70b5 100644
  	 * @hdmi: HDMI-related variable and properties. Filled by
  	 * @drm_atomic_helper_connector_hdmi_check().
 diff --git a/include/drm/drm_edid.h b/include/drm/drm_edid.h
-index eaac5e665..f4bd6ebe3 100644
+index e9e7c9d14..a233487a3 100644
 --- a/include/drm/drm_edid.h
 +++ b/include/drm/drm_edid.h
-@@ -443,6 +443,9 @@ int drm_edid_header_is_valid(const void *edid);
+@@ -449,6 +449,9 @@ int drm_edid_header_is_valid(const void *edid);
  bool drm_edid_is_valid(struct edid *edid);
  void drm_edid_get_monitor_name(const struct edid *edid, char *name,
  			       int buflen);

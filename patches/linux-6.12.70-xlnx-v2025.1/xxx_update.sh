@@ -1,5 +1,5 @@
 PATCH_DIR=$(cd $(dirname $0); pwd)
-BASE_PATCH_DIR="/home/ichiro/work/ZynqMP-FPGA-Linux-Kernel-6.12/patches/linux-6.12.60-xlnx-v2025.1-update"
+BASE_PATCH_DIR="/home/ichiro/work/ZynqMP-FPGA-Linux-Kernel-6.12/patches/linux-6.12.70-xlnx-v2025.1-update"
 dry_run=0
 verbose=1
 update=1

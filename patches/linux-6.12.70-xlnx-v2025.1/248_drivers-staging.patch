@@ -441,10 +441,10 @@ index 000000000..96e62b6dc
 +		xlnx,has-inband-mgmt-tag ;
 +	};
 diff --git a/drivers/staging/Kconfig b/drivers/staging/Kconfig
-index 3fb68d60d..1cc85f601 100644
+index 7aa37f54a..b9583f9c8 100644
 --- a/drivers/staging/Kconfig
 +++ b/drivers/staging/Kconfig
-@@ -64,4 +64,22 @@ source "drivers/staging/fieldbus/Kconfig"
+@@ -62,4 +62,22 @@ source "drivers/staging/fieldbus/Kconfig"
  
  source "drivers/staging/vme_user/Kconfig"
  
@@ -468,10 +468,10 @@ index 3fb68d60d..1cc85f601 100644
 +
  endif # STAGING
 diff --git a/drivers/staging/Makefile b/drivers/staging/Makefile
-index c977aa13f..a78cdf1f7 100644
+index 2e18fe5b7..c0e0970cd 100644
 --- a/drivers/staging/Makefile
 +++ b/drivers/staging/Makefile
-@@ -21,3 +21,11 @@ obj-$(CONFIG_GREYBUS)		+= greybus/
+@@ -20,3 +20,11 @@ obj-$(CONFIG_GREYBUS)		+= greybus/
  obj-$(CONFIG_BCM2835_VCHIQ)	+= vc04_services/
  obj-$(CONFIG_XIL_AXIS_FIFO)	+= axis-fifo/
  obj-$(CONFIG_FIELDBUS_DEV)     += fieldbus/
