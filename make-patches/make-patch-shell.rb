@@ -6,7 +6,7 @@ require_relative 'source-tree-diff-list'
 
 class MakePatchShell
 
-  VERSION = "0.1.0"
+  VERSION = "0.1.1"
 
   class SourceGroup
     attr_reader :name
@@ -37,8 +37,8 @@ class MakePatchShell
     end
   end
 
-  attr_reader :old_name
-  attr_reader :new_name
+  attr_reader :old_name, :old_path
+  attr_reader :new_name, :new_path
   attr_reader :diff_name
   attr_reader :diff_list
   attr_reader :diff_dict
@@ -46,7 +46,9 @@ class MakePatchShell
   def initialize(diff_file_name, patch_group_file)
     @diff_list  = SourceTreeDiffList.load(diff_file_name)
     @old_name   = @diff_list.a_name
+    @old_path   = @diff_list.a_path
     @new_name   = @diff_list.b_name
+    @new_path   = @diff_list.b_path
     @diff_name  = @diff_list.name
     @diff_dict  = Hash.new
     add_diff_dict(@diff_list.list)
@@ -107,11 +109,11 @@ class MakePatchShell
       group.file_list.each do |path|
         info = @diff_dict[path]
         if info[1] == true then
-          a_path = "#{@old_name}/#{path}"
-          b_path = "#{@new_name}/#{path}"
+          a_path = "#{@old_path}/#{path}"
+          b_path = "#{@new_path}/#{path}"
         else
-          a_path = "#{@old_name}/#{path} --label=/dev/null"
-          b_path = "#{@new_name}/#{path}"
+          a_path = "#{@old_path}/#{path} --label=/dev/null"
+          b_path = "#{@new_path}/#{path}"
         end
         patch_info[:diff_list].push({a: a_path, b: b_path})
       end
