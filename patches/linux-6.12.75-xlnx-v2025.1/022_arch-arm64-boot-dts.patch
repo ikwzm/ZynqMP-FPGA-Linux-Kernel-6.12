@@ -20572,7 +20572,7 @@ index 000000000..1a99d1e08
 +	snps,usb3_lpm_capable;
 +};
 diff --git a/arch/arm64/boot/dts/xilinx/zynqmp.dtsi b/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
-index e2ad5fb2c..441881faf 100644
+index 0ff45540c..ff7523656 100644
 --- a/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
 +++ b/arch/arm64/boot/dts/xilinx/zynqmp.dtsi
 @@ -18,6 +18,7 @@
@@ -20615,7 +20615,7 @@ index e2ad5fb2c..441881faf 100644
  			compatible = "arm,cortex-a53";
  			device_type = "cpu";
  			enable-method = "psci";
-@@ -279,10 +284,6 @@ zynqmp_pcap: pcap {
+@@ -274,10 +279,6 @@ zynqmp_pcap: pcap {
  				compatible = "xlnx,zynqmp-pcap-fpga";
  			};
  
@@ -20626,7 +20626,7 @@ index e2ad5fb2c..441881faf 100644
  			zynqmp_reset: reset-controller {
  				compatible = "xlnx,zynqmp-reset";
  				#reset-cells = <1>;
-@@ -318,77 +319,99 @@ fpga_full: fpga-region {
+@@ -313,77 +314,99 @@ fpga_full: fpga-region {
  		ranges;
  	};
  
@@ -20791,7 +20791,7 @@ index e2ad5fb2c..441881faf 100644
  		};
  	};
  
-@@ -838,6 +861,78 @@ ocm: memory-controller@ff960000 {
+@@ -833,6 +856,78 @@ ocm: memory-controller@ff960000 {
  			interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
  		};
  
@@ -20870,7 +20870,7 @@ index e2ad5fb2c..441881faf 100644
  		pcie: pcie@fd0e0000 {
  			compatible = "xlnx,nwl-pcie-2.11";
  			status = "disabled";
-@@ -1161,7 +1256,6 @@ lpd_watchdog: watchdog@ff150000 {
+@@ -1156,7 +1251,6 @@ lpd_watchdog: watchdog@ff150000 {
  
  		xilinx_ams: ams@ffa50000 {
  			compatible = "xlnx,zynqmp-ams";
@@ -20878,7 +20878,7 @@ index e2ad5fb2c..441881faf 100644
  			interrupt-parent = <&gic>;
  			interrupts = <GIC_SPI 56 IRQ_TYPE_LEVEL_HIGH>;
  			reg = <0x0 0xffa50000 0x0 0x800>;
-@@ -1211,32 +1305,35 @@ zynqmp_dpsub: display@fd4a0000 {
+@@ -1206,32 +1300,35 @@ zynqmp_dpsub: display@fd4a0000 {
  				      "dp_vtc_pixel_clk_in";
  			power-domains = <&zynqmp_firmware PD_DP>;
  			resets = <&zynqmp_reset ZYNQMP_RESET_DP>;

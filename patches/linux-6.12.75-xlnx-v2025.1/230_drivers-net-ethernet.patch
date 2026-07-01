@@ -584,7 +584,7 @@ index 2847278d9..6a5da7823 100644
  /* struct macb_dma_desc - Hardware DMA descriptor
   * @addr: DMA address of data buffer
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
-index 095c1cfcc..05fc9342b 100644
+index f258c4b82..a08e73da4 100644
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
 @@ -29,6 +29,7 @@
@@ -713,15 +713,7 @@ index 095c1cfcc..05fc9342b 100644
  		u32 pcsctrl, old_pcsctrl;
  
  		old_pcsctrl = gem_readl(bp, PCSCNTRL);
-@@ -759,6 +807,7 @@ static void macb_mac_link_up(struct phylink_config *config,
- 		/* Initialize rings & buffers as clearing MACB_BIT(TE) in link down
- 		 * cleared the pipeline and control registers.
- 		 */
-+		bp->macbgem_ops.mog_init_rings(bp);
- 		macb_init_buffers(bp);
- 
- 		for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue)
-@@ -768,10 +817,6 @@ static void macb_mac_link_up(struct phylink_config *config,
+@@ -766,10 +814,6 @@ static void macb_mac_link_up(struct phylink_config *config,
  
  	macb_or_gem_writel(bp, NCFGR, ctrl);
  
@@ -732,7 +724,7 @@ index 095c1cfcc..05fc9342b 100644
  	spin_unlock_irqrestore(&bp->lock, flags);
  
  	if (!(bp->caps & MACB_CAPS_MACB_IS_EMAC))
-@@ -793,7 +838,8 @@ static struct phylink_pcs *macb_mac_select_pcs(struct phylink_config *config,
+@@ -791,7 +835,8 @@ static struct phylink_pcs *macb_mac_select_pcs(struct phylink_config *config,
  	struct net_device *ndev = to_net_dev(config->dev);
  	struct macb *bp = netdev_priv(ndev);
  
@@ -742,7 +734,7 @@ index 095c1cfcc..05fc9342b 100644
  		return &bp->phylink_usx_pcs;
  	else if (interface == PHY_INTERFACE_MODE_SGMII)
  		return &bp->phylink_sgmii_pcs;
-@@ -841,6 +887,13 @@ static int macb_phylink_connect(struct macb *bp)
+@@ -839,6 +884,13 @@ static int macb_phylink_connect(struct macb *bp)
  		return ret;
  	}
  
@@ -756,7 +748,7 @@ index 095c1cfcc..05fc9342b 100644
  	phylink_start(bp->phylink);
  
  	return 0;
-@@ -914,20 +967,16 @@ static int macb_mii_probe(struct net_device *dev)
+@@ -912,20 +964,16 @@ static int macb_mii_probe(struct net_device *dev)
  	return 0;
  }
  
@@ -782,7 +774,7 @@ index 095c1cfcc..05fc9342b 100644
  
  	/* Only create the PHY from the device tree if at least one PHY is
  	 * described. Otherwise scan the entire MDIO bus. We do this to support
-@@ -944,22 +993,43 @@ static int macb_mdiobus_register(struct macb *bp)
+@@ -942,22 +990,43 @@ static int macb_mdiobus_register(struct macb *bp)
  			return of_mdiobus_register(bp->mii_bus, np);
  		}
  
@@ -831,7 +823,7 @@ index 095c1cfcc..05fc9342b 100644
  		return macb_mii_probe(bp->dev);
  
  	/* Enable management port */
-@@ -983,7 +1053,7 @@ static int macb_mii_init(struct macb *bp)
+@@ -981,7 +1050,7 @@ static int macb_mii_init(struct macb *bp)
  
  	dev_set_drvdata(&bp->dev->dev, bp->mii_bus);
  
@@ -840,7 +832,7 @@ index 095c1cfcc..05fc9342b 100644
  	if (err)
  		goto err_out_free_mdiobus;
  
-@@ -998,6 +1068,8 @@ static int macb_mii_init(struct macb *bp)
+@@ -996,6 +1065,8 @@ static int macb_mii_init(struct macb *bp)
  err_out_free_mdiobus:
  	mdiobus_free(bp->mii_bus);
  err_out:
@@ -849,16 +841,7 @@ index 095c1cfcc..05fc9342b 100644
  	return err;
  }
  
-@@ -2984,8 +3056,6 @@ static int macb_open(struct net_device *dev)
- 		goto pm_exit;
- 	}
- 
--	bp->macbgem_ops.mog_init_rings(bp);
--
- 	for (q = 0, queue = bp->queues; q < bp->num_queues; ++q, ++queue) {
- 		napi_enable(&queue->napi_rx);
- 		napi_enable(&queue->napi_tx);
-@@ -4963,6 +5033,16 @@ static const struct macb_config versal_config = {
+@@ -4962,6 +5033,16 @@ static const struct macb_config versal_config = {
  	.usrio = &macb_default_usrio,
  };
  
@@ -875,7 +858,7 @@ index 095c1cfcc..05fc9342b 100644
  static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "cdns,at91sam9260-macb", .data = &at91sam9260_config },
  	{ .compatible = "cdns,macb" },
-@@ -4986,6 +5066,7 @@ static const struct of_device_id macb_dt_ids[] = {
+@@ -4985,6 +5066,7 @@ static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "xlnx,zynqmp-gem", .data = &zynqmp_config},
  	{ .compatible = "xlnx,zynq-gem", .data = &zynq_config },
  	{ .compatible = "xlnx,versal-gem", .data = &versal_config},

@@ -186,10 +186,10 @@ index 000000000..a7bff5ab2
 +
 +#endif
 diff --git a/include/xen/xen.h b/include/xen/xen.h
-index a1e5b3f18..525106d0a 100644
+index 86fe96fe5..88e0defa4 100644
 --- a/include/xen/xen.h
 +++ b/include/xen/xen.h
-@@ -91,4 +91,9 @@ static inline bool xen_processor_present(uint32_t acpi_id)
+@@ -93,4 +93,9 @@ static inline bool xen_processor_present(uint32_t acpi_id)
  }
  #endif
  

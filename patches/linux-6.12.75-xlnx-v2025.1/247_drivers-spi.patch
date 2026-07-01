@@ -994,10 +994,10 @@ index e1d64a9a3..6d4b4fb49 100644
  };
  
 diff --git a/drivers/spi/spi-mem.c b/drivers/spi/spi-mem.c
-index 96374afd0..cdccac4ed 100644
+index ff9f2e9ab..7bf0b2145 100644
 --- a/drivers/spi/spi-mem.c
 +++ b/drivers/spi/spi-mem.c
-@@ -449,6 +449,7 @@ int spi_mem_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
+@@ -460,6 +460,7 @@ int spi_mem_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
  		xfers[xferpos].tx_buf = tmpbuf + op->addr.nbytes + 1;
  		xfers[xferpos].len = op->dummy.nbytes;
  		xfers[xferpos].tx_nbits = op->dummy.buswidth;
