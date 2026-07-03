@@ -164,7 +164,7 @@ index 448656d68..930388ce5 100644
  }
  
 diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
-index 4c6c4aa7d..4c6820af6 100644
+index 45e786852..412c511a0 100644
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
 @@ -191,7 +191,11 @@ int xhci_reset(struct xhci_hcd *xhci, u64 timeout_us)

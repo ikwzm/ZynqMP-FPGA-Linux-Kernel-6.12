@@ -584,7 +584,7 @@ index 2847278d9..6a5da7823 100644
  /* struct macb_dma_desc - Hardware DMA descriptor
   * @addr: DMA address of data buffer
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
-index f258c4b82..a08e73da4 100644
+index 89aa50893..d953f1946 100644
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
 @@ -29,6 +29,7 @@
@@ -595,7 +595,7 @@ index f258c4b82..a08e73da4 100644
  #include <linux/ip.h>
  #include <linux/udp.h>
  #include <linux/tcp.h>
-@@ -87,9 +88,6 @@ struct sifive_fu540_macb_mgmt {
+@@ -88,9 +89,6 @@ struct sifive_fu540_macb_mgmt {
  
  #define MACB_WOL_ENABLED		BIT(0)
  
@@ -605,7 +605,7 @@ index f258c4b82..a08e73da4 100644
  /* Graceful stop timeouts in us. We should allow up to
   * 1 frame time (10 Mbits/s, full-duplex, ignoring collisions)
   */
-@@ -97,6 +95,7 @@ struct sifive_fu540_macb_mgmt {
+@@ -98,6 +96,7 @@ struct sifive_fu540_macb_mgmt {
  #define MACB_PM_TIMEOUT  100 /* ms */
  
  #define MACB_MDIO_TIMEOUT	1000000 /* in usecs */
@@ -613,7 +613,7 @@ index f258c4b82..a08e73da4 100644
  
  /* DMA buffer descriptor might be different size
   * depends on hardware configuration:
-@@ -567,28 +566,74 @@ static void macb_usx_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -568,28 +567,74 @@ static void macb_usx_pcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
  				 int duplex)
  {
  	struct macb *bp = container_of(pcs, struct macb, phylink_usx_pcs);
@@ -694,7 +694,7 @@ index f258c4b82..a08e73da4 100644
  	val = gem_readl(bp, NCFGR);
  	if (val & GEM_BIT(PAE))
  		state->pause = MLO_PAUSE_RX;
-@@ -663,6 +708,8 @@ static void macb_mac_config(struct phylink_config *config, unsigned int mode,
+@@ -664,6 +709,8 @@ static void macb_mac_config(struct phylink_config *config, unsigned int mode,
  
  		if (state->interface == PHY_INTERFACE_MODE_SGMII) {
  			ctrl |= GEM_BIT(SGMIIEN) | GEM_BIT(PCSSEL);
@@ -703,7 +703,7 @@ index f258c4b82..a08e73da4 100644
  		} else if (state->interface == PHY_INTERFACE_MODE_10GBASER) {
  			ctrl |= GEM_BIT(PCSSEL);
  			ncr |= GEM_BIT(ENABLE_HS_MAC);
-@@ -683,7 +730,8 @@ static void macb_mac_config(struct phylink_config *config, unsigned int mode,
+@@ -684,7 +731,8 @@ static void macb_mac_config(struct phylink_config *config, unsigned int mode,
  	 * Must be written after PCSSEL is set in NCFGR,
  	 * otherwise writes will not take effect.
  	 */
@@ -713,7 +713,7 @@ index f258c4b82..a08e73da4 100644
  		u32 pcsctrl, old_pcsctrl;
  
  		old_pcsctrl = gem_readl(bp, PCSCNTRL);
-@@ -766,10 +814,6 @@ static void macb_mac_link_up(struct phylink_config *config,
+@@ -856,10 +904,6 @@ static void macb_mac_link_up(struct phylink_config *config,
  
  	macb_or_gem_writel(bp, NCFGR, ctrl);
  
@@ -723,8 +723,8 @@ index f258c4b82..a08e73da4 100644
 -
  	spin_unlock_irqrestore(&bp->lock, flags);
  
- 	if (!(bp->caps & MACB_CAPS_MACB_IS_EMAC))
-@@ -791,7 +835,8 @@ static struct phylink_pcs *macb_mac_select_pcs(struct phylink_config *config,
+ 	if (!(bp->caps & MACB_CAPS_MACB_IS_EMAC)) {
+@@ -883,7 +927,8 @@ static struct phylink_pcs *macb_mac_select_pcs(struct phylink_config *config,
  	struct net_device *ndev = to_net_dev(config->dev);
  	struct macb *bp = netdev_priv(ndev);
  
@@ -734,7 +734,7 @@ index f258c4b82..a08e73da4 100644
  		return &bp->phylink_usx_pcs;
  	else if (interface == PHY_INTERFACE_MODE_SGMII)
  		return &bp->phylink_sgmii_pcs;
-@@ -839,6 +884,13 @@ static int macb_phylink_connect(struct macb *bp)
+@@ -931,6 +976,13 @@ static int macb_phylink_connect(struct macb *bp)
  		return ret;
  	}
  
@@ -748,7 +748,7 @@ index f258c4b82..a08e73da4 100644
  	phylink_start(bp->phylink);
  
  	return 0;
-@@ -912,20 +964,16 @@ static int macb_mii_probe(struct net_device *dev)
+@@ -1004,20 +1056,16 @@ static int macb_mii_probe(struct net_device *dev)
  	return 0;
  }
  
@@ -774,7 +774,7 @@ index f258c4b82..a08e73da4 100644
  
  	/* Only create the PHY from the device tree if at least one PHY is
  	 * described. Otherwise scan the entire MDIO bus. We do this to support
-@@ -942,22 +990,43 @@ static int macb_mdiobus_register(struct macb *bp)
+@@ -1034,22 +1082,43 @@ static int macb_mdiobus_register(struct macb *bp)
  			return of_mdiobus_register(bp->mii_bus, np);
  		}
  
@@ -823,7 +823,7 @@ index f258c4b82..a08e73da4 100644
  		return macb_mii_probe(bp->dev);
  
  	/* Enable management port */
-@@ -981,7 +1050,7 @@ static int macb_mii_init(struct macb *bp)
+@@ -1073,7 +1142,7 @@ static int macb_mii_init(struct macb *bp)
  
  	dev_set_drvdata(&bp->dev->dev, bp->mii_bus);
  
@@ -832,7 +832,7 @@ index f258c4b82..a08e73da4 100644
  	if (err)
  		goto err_out_free_mdiobus;
  
-@@ -996,6 +1065,8 @@ static int macb_mii_init(struct macb *bp)
+@@ -1088,6 +1157,8 @@ static int macb_mii_init(struct macb *bp)
  err_out_free_mdiobus:
  	mdiobus_free(bp->mii_bus);
  err_out:
@@ -841,7 +841,7 @@ index f258c4b82..a08e73da4 100644
  	return err;
  }
  
-@@ -4962,6 +5033,16 @@ static const struct macb_config versal_config = {
+@@ -5062,6 +5133,16 @@ static const struct macb_config versal_config = {
  	.usrio = &macb_default_usrio,
  };
  
@@ -858,7 +858,7 @@ index f258c4b82..a08e73da4 100644
  static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "cdns,at91sam9260-macb", .data = &at91sam9260_config },
  	{ .compatible = "cdns,macb" },
-@@ -4985,6 +5066,7 @@ static const struct of_device_id macb_dt_ids[] = {
+@@ -5085,6 +5166,7 @@ static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "xlnx,zynqmp-gem", .data = &zynqmp_config},
  	{ .compatible = "xlnx,zynq-gem", .data = &zynq_config },
  	{ .compatible = "xlnx,versal-gem", .data = &versal_config},

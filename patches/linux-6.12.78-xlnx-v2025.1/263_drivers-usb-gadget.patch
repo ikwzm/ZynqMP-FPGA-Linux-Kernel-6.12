@@ -1,8 +1,8 @@
 diff --git a/drivers/usb/gadget/function/f_tcm.c b/drivers/usb/gadget/function/f_tcm.c
-index 6ad205046..718f0c3cc 100644
+index cca19b465..ab65c37ff 100644
 --- a/drivers/usb/gadget/function/f_tcm.c
 +++ b/drivers/usb/gadget/function/f_tcm.c
-@@ -1615,8 +1615,10 @@ static ssize_t tcm_usbg_tpg_nexus_store(struct config_item *item,
+@@ -1629,8 +1629,10 @@ static ssize_t tcm_usbg_tpg_nexus_store(struct config_item *item,
  
  CONFIGFS_ATTR(tcm_usbg_tpg_, nexus);
  
@@ -13,7 +13,7 @@ index 6ad205046..718f0c3cc 100644
  	NULL,
  };
  
-@@ -1921,6 +1923,32 @@ static struct usb_gadget_strings *tcm_strings[] = {
+@@ -1935,6 +1937,32 @@ static struct usb_gadget_strings *tcm_strings[] = {
  	NULL,
  };
  

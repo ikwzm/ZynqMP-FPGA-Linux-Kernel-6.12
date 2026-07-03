@@ -341,10 +341,10 @@ index 0ee7b6b71..b98ee18ac 100644
 +EXPORT_SYMBOL_GPL(platform_irqchip_remove);
 +#endif
 diff --git a/include/linux/irq.h b/include/linux/irq.h
-index fa711f809..5d33b3f9f 100644
+index 25f51bf3c..be356a413 100644
 --- a/include/linux/irq.h
 +++ b/include/linux/irq.h
-@@ -1140,6 +1140,21 @@ struct irq_domain_chip_generic_info {
+@@ -1143,6 +1143,21 @@ struct irq_domain_chip_generic_info {
  	void			(*exit)(struct irq_chip_generic *gc);
  };
  
@@ -366,7 +366,7 @@ index fa711f809..5d33b3f9f 100644
  /* Generic chip callback functions */
  void irq_gc_noop(struct irq_data *d);
  void irq_gc_mask_disable_reg(struct irq_data *d);
-@@ -1310,7 +1325,11 @@ int ipi_mux_create(unsigned int nr_ipi, void (*mux_send)(unsigned int cpu));
+@@ -1313,7 +1328,11 @@ int ipi_mux_create(unsigned int nr_ipi, void (*mux_send)(unsigned int cpu));
   * Returns 0 on success, or -EBUSY if an IRQ handler has already been
   * registered.
   */

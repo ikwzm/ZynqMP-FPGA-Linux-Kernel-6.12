@@ -207,7 +207,7 @@ index 000000000..243f150e2
 +
 +...
 diff --git a/drivers/media/i2c/Kconfig b/drivers/media/i2c/Kconfig
-index 5cb596f38..5f117e9d1 100644
+index 470307135..a4e1db517 100644
 --- a/drivers/media/i2c/Kconfig
 +++ b/drivers/media/i2c/Kconfig
 @@ -1451,6 +1451,19 @@ endmenu
