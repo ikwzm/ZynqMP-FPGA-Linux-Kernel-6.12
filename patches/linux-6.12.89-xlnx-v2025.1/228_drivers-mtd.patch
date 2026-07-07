@@ -1985,10 +1985,10 @@ index 1516b6d0d..023fb693d 100644
  	const struct spi_nor_otp_organization *otp;
  	const struct spi_nor_fixups *fixups;
 diff --git a/drivers/mtd/spi-nor/debugfs.c b/drivers/mtd/spi-nor/debugfs.c
-index fa6956144..744e112e3 100644
+index 14ba1680c..e7ddee1bc 100644
 --- a/drivers/mtd/spi-nor/debugfs.c
 +++ b/drivers/mtd/spi-nor/debugfs.c
-@@ -76,7 +76,7 @@ static void spi_nor_print_flags(struct seq_file *s, unsigned long flags,
+@@ -77,7 +77,7 @@ static void spi_nor_print_flags(struct seq_file *s, unsigned long flags,
  static int spi_nor_params_show(struct seq_file *s, void *data)
  {
  	struct spi_nor *nor = s->private;
@@ -1997,7 +1997,7 @@ index fa6956144..744e112e3 100644
  	struct spi_nor_erase_map *erase_map = &params->erase_map;
  	struct spi_nor_erase_region *region = erase_map->regions;
  	const struct flash_info *info = nor->info;
-@@ -138,7 +138,7 @@ static int spi_nor_params_show(struct seq_file *s, void *data)
+@@ -140,7 +140,7 @@ static int spi_nor_params_show(struct seq_file *s, void *data)
  
  	if (!(nor->flags & SNOR_F_NO_OP_CHIP_ERASE)) {
  		string_get_size(params->size, 1, STRING_UNITS_2, buf, sizeof(buf));
@@ -2006,7 +2006,7 @@ index fa6956144..744e112e3 100644
  	}
  
  	seq_puts(s, "\nsector map\n");
-@@ -182,7 +182,7 @@ static void spi_nor_print_pp_cmd(struct seq_file *s,
+@@ -184,7 +184,7 @@ static void spi_nor_print_pp_cmd(struct seq_file *s,
  static int spi_nor_capabilities_show(struct seq_file *s, void *data)
  {
  	struct spi_nor *nor = s->private;
@@ -4045,7 +4045,7 @@ index fcd081b75..69ba7fd80 100644
  	u8 mfr_flags = nor->info->mfr_flags;
  
 diff --git a/drivers/mtd/spi-nor/sst.c b/drivers/mtd/spi-nor/sst.c
-index 175211fe6..eeb19a5a9 100644
+index db02c14ba..bc7cf5934 100644
 --- a/drivers/mtd/spi-nor/sst.c
 +++ b/drivers/mtd/spi-nor/sst.c
 @@ -20,10 +20,11 @@ static int sst26vf_nor_lock(struct spi_nor *nor, loff_t ofs, u64 len)

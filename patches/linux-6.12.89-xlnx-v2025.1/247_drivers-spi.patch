@@ -2319,7 +2319,7 @@ index de4c18247..68168e024 100644
  	/* QSPI controller initializations */
  	zynq_qspi_init_hw(xqspi, ctlr->num_chipselect);
 diff --git a/drivers/spi/spi-zynqmp-gqspi.c b/drivers/spi/spi-zynqmp-gqspi.c
-index 4b091b4d4..d9d3f21f3 100644
+index 143c572b2..cf74589b4 100644
 --- a/drivers/spi/spi-zynqmp-gqspi.c
 +++ b/drivers/spi/spi-zynqmp-gqspi.c
 @@ -21,6 +21,7 @@
@@ -2724,13 +2724,13 @@ index 4b091b4d4..d9d3f21f3 100644
  	ctlr->auto_runtime_pm = true;
 +	ctlr->flags |= SPI_CONTROLLER_MULTI_CS;
  
- 	ret = devm_spi_register_controller(&pdev->dev, ctlr);
+ 	ret = spi_register_controller(ctlr);
  	if (ret) {
 diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
-index 0c3200d08..f3c1bef04 100644
+index 5a6c2f567..944ff48f3 100644
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
-@@ -2482,6 +2482,9 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
+@@ -2484,6 +2484,9 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
  	of_spi_parse_dt_cs_delay(nc, &spi->cs_hold, "spi-cs-hold-delay-ns");
  	of_spi_parse_dt_cs_delay(nc, &spi->cs_inactive, "spi-cs-inactive-delay-ns");
  

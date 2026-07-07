@@ -1,8 +1,8 @@
 diff --git a/drivers/remoteproc/xlnx_r5_remoteproc.c b/drivers/remoteproc/xlnx_r5_remoteproc.c
-index c165422d0..9b7e63e5f 100644
+index 6a64e5909..f286cb18f 100644
 --- a/drivers/remoteproc/xlnx_r5_remoteproc.c
 +++ b/drivers/remoteproc/xlnx_r5_remoteproc.c
-@@ -265,6 +265,9 @@ static struct mbox_info *zynqmp_r5_setup_mbox(struct device *cdev)
+@@ -267,6 +267,9 @@ static struct mbox_info *zynqmp_r5_setup_mbox(struct device *cdev)
  	struct mbox_client *mbox_cl;
  	struct mbox_info *ipi;
  
@@ -12,7 +12,7 @@ index c165422d0..9b7e63e5f 100644
  	ipi = kzalloc(sizeof(*ipi), GFP_KERNEL);
  	if (!ipi)
  		return NULL;
-@@ -380,6 +383,18 @@ static int zynqmp_r5_rproc_start(struct rproc *rproc)
+@@ -382,6 +385,18 @@ static int zynqmp_r5_rproc_start(struct rproc *rproc)
  	dev_dbg(r5_core->dev, "RPU boot addr 0x%llx from %s.", rproc->bootaddr,
  		bootmem == PM_RPU_BOOTMEM_HIVEC ? "OCM" : "TCM");
  
@@ -31,7 +31,7 @@ index c165422d0..9b7e63e5f 100644
  	ret = zynqmp_pm_request_wake(r5_core->pm_domain_id, 1,
  				     bootmem, ZYNQMP_PM_REQUEST_ACK_NO);
  	if (ret)
-@@ -401,10 +416,24 @@ static int zynqmp_r5_rproc_stop(struct rproc *rproc)
+@@ -403,10 +418,24 @@ static int zynqmp_r5_rproc_stop(struct rproc *rproc)
  	struct zynqmp_r5_core *r5_core = rproc->priv;
  	int ret;
  
@@ -57,7 +57,7 @@ index c165422d0..9b7e63e5f 100644
  
  	return ret;
  }
-@@ -1309,9 +1338,6 @@ static int zynqmp_r5_cluster_init(struct zynqmp_r5_cluster *cluster)
+@@ -1311,9 +1340,6 @@ static int zynqmp_r5_cluster_init(struct zynqmp_r5_cluster *cluster)
  	if (core_count == 0) {
  		dev_err(dev, "Invalid number of r5 cores %d", core_count);
  		return -EINVAL;
