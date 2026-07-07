@@ -584,7 +584,7 @@ index 2847278d9..6a5da7823 100644
  /* struct macb_dma_desc - Hardware DMA descriptor
   * @addr: DMA address of data buffer
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
-index 89aa50893..d953f1946 100644
+index fbf8d0ba9..d884754c5 100644
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
 @@ -29,6 +29,7 @@
@@ -912,7 +912,7 @@ index 7d7dc1771..12f86dcf8 100644
 +obj-$(CONFIG_AXIENET_HAS_MCDMA) += xilinx_axienet_mcdma.o
 +obj-$(CONFIG_XILINX_AXI_EOE) += xilinx_axienet_eoe.o
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet.h b/drivers/net/ethernet/xilinx/xilinx_axienet.h
-index d64b8abcf..f9a7e7929 100644
+index cbdca0fb8..88196ff69 100644
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet.h
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet.h
 @@ -9,12 +9,15 @@

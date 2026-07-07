@@ -133,7 +133,7 @@ index 9bf0fb17a..c3d2866f6 100644
              # I2C Touch-Screen Controller
            - ti,tsc2003
 diff --git a/drivers/spi/spi-cadence-quadspi.c b/drivers/spi/spi-cadence-quadspi.c
-index 288a0467c..75c3741d2 100644
+index 72262b6fb..9bc41bfbc 100644
 --- a/drivers/spi/spi-cadence-quadspi.c
 +++ b/drivers/spi/spi-cadence-quadspi.c
 @@ -29,9 +29,11 @@
@@ -792,7 +792,7 @@ index 288a0467c..75c3741d2 100644
  	if (refcount_read(&cqspi->inflight_ops) == 0)
  		return -ENODEV;
 @@ -1478,6 +1867,31 @@ static int cqspi_exec_mem_op(struct spi_mem *mem, const struct spi_mem_op *op)
- 		return -EBUSY;
+ 		goto dec_inflight_refcount;
  	}
  
 +	f_pdata = &cqspi->f_pdata[spi_get_chipselect(mem->spi, 0)];
@@ -823,7 +823,7 @@ index 288a0467c..75c3741d2 100644
  	ret = cqspi_mem_process(mem, op);
  
  	pm_runtime_mark_last_busy(dev);
-@@ -1637,6 +2051,22 @@ static void cqspi_controller_init(struct cqspi_st *cqspi)
+@@ -1638,6 +2052,22 @@ static void cqspi_controller_init(struct cqspi_st *cqspi)
  	}
  }
  
@@ -846,7 +846,7 @@ index 288a0467c..75c3741d2 100644
  static void cqspi_controller_detect_fifo_depth(struct cqspi_st *cqspi)
  {
  	struct device *dev = &cqspi->pdev->dev;
-@@ -1709,16 +2139,31 @@ static int cqspi_setup_flash(struct cqspi_st *cqspi)
+@@ -1710,16 +2140,31 @@ static int cqspi_setup_flash(struct cqspi_st *cqspi)
  	struct platform_device *pdev = cqspi->pdev;
  	struct device *dev = &pdev->dev;
  	struct cqspi_flash_pdata *f_pdata;
@@ -880,7 +880,7 @@ index 288a0467c..75c3741d2 100644
  		if (cs >= cqspi->num_chipselect) {
  			dev_err(dev, "Chip select %d out of range.\n", cs);
  			return -EINVAL;
-@@ -1851,6 +2296,7 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1852,6 +2297,7 @@ static int cqspi_probe(struct platform_device *pdev)
  	cqspi->ahb_size = resource_size(res_ahb);
  
  	init_completion(&cqspi->transfer_complete);
@@ -888,7 +888,7 @@ index 288a0467c..75c3741d2 100644
  
  	/* Obtain IRQ line. */
  	irq = platform_get_irq(pdev, 0);
-@@ -1933,11 +2379,13 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1934,11 +2380,13 @@ static int cqspi_probe(struct platform_device *pdev)
  		if (ddata->quirks & CQSPI_DISABLE_STIG_MODE)
  			cqspi->disable_stig_mode = true;
  
@@ -904,7 +904,7 @@ index 288a0467c..75c3741d2 100644
  		}
  	}
  
-@@ -1955,9 +2403,12 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1956,9 +2404,12 @@ static int cqspi_probe(struct platform_device *pdev)
  	cqspi_controller_enable(cqspi, 0);
  	cqspi_controller_detect_fifo_depth(cqspi);
  	cqspi_controller_init(cqspi);
@@ -917,7 +917,7 @@ index 288a0467c..75c3741d2 100644
  
  	ret = cqspi_setup_flash(cqspi);
  	if (ret) {
-@@ -1967,6 +2418,9 @@ static int cqspi_probe(struct platform_device *pdev)
+@@ -1968,6 +2419,9 @@ static int cqspi_probe(struct platform_device *pdev)
  
  	host->num_chipselect = cqspi->num_chipselect;
  
@@ -927,7 +927,7 @@ index 288a0467c..75c3741d2 100644
  	if (cqspi->use_direct_mode) {
  		ret = cqspi_request_mmap_dma(cqspi);
  		if (ret == -EPROBE_DEFER)
-@@ -2030,6 +2484,17 @@ static void cqspi_remove(struct platform_device *pdev)
+@@ -2031,6 +2485,17 @@ static void cqspi_remove(struct platform_device *pdev)
  static int cqspi_runtime_suspend(struct device *dev)
  {
  	struct cqspi_st *cqspi = dev_get_drvdata(dev);
@@ -945,7 +945,7 @@ index 288a0467c..75c3741d2 100644
  
  	cqspi_controller_enable(cqspi, 0);
  	clk_disable_unprepare(cqspi->clk);
-@@ -2073,6 +2538,22 @@ static int cqspi_resume(struct device *dev)
+@@ -2074,6 +2539,22 @@ static int cqspi_resume(struct device *dev)
  		dev_err(dev, "pm_runtime_force_resume failed on resume\n");
  		return ret;
  	}
@@ -968,7 +968,7 @@ index 288a0467c..75c3741d2 100644
  
  	return spi_controller_resume(cqspi->host);
  }
-@@ -2108,7 +2589,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
+@@ -2109,7 +2590,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
  
  static const struct cqspi_driver_platdata versal_ospi = {
  	.hwcaps_mask = CQSPI_SUPPORTS_OCTAL,
@@ -988,7 +988,7 @@ index 288a0467c..75c3741d2 100644
  	.indirect_read_dma = cqspi_versal_indirect_read_dma,
  	.get_dma_status = cqspi_get_versal_dma_status,
  };
-@@ -2165,6 +2657,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
+@@ -2166,6 +2658,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
  		.compatible = "mobileye,eyeq5-ospi",
  		.data = &mobileye_eyeq5_ospi,
  	},
@@ -2727,10 +2727,10 @@ index 4b091b4d4..d9d3f21f3 100644
  	ret = devm_spi_register_controller(&pdev->dev, ctlr);
  	if (ret) {
 diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
-index 7cf37e28e..a13ed780f 100644
+index 0c3200d08..f3c1bef04 100644
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
-@@ -2487,6 +2487,9 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
+@@ -2482,6 +2482,9 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,
  	of_spi_parse_dt_cs_delay(nc, &spi->cs_hold, "spi-cs-hold-delay-ns");
  	of_spi_parse_dt_cs_delay(nc, &spi->cs_inactive, "spi-cs-inactive-delay-ns");
  
@@ -2764,26 +2764,27 @@ index c7a7719c2..de250d25b 100644
  
  /**
 diff --git a/include/linux/spi/spi.h b/include/linux/spi/spi.h
-index 71ad76693..d4b8b0259 100644
+index 8f6280bd2..aded2defa 100644
 --- a/include/linux/spi/spi.h
 +++ b/include/linux/spi/spi.h
-@@ -164,6 +164,7 @@ extern void spi_transfer_cs_change_delay_exec(struct spi_message *msg,
-  *	(optional, NULL when not using a GPIO line)
+@@ -157,6 +157,7 @@ extern void spi_transfer_cs_change_delay_exec(struct spi_message *msg,
+  * @pcpu_statistics: statistics for the spi_device
   * @word_delay: delay to be inserted between consecutive
   *	words of a transfer
 + * @multi_die: Flash device with multiple dies.
   * @cs_setup: delay to be introduced by the controller after CS is asserted
   * @cs_hold: delay to be introduced by the controller before CS is deasserted
   * @cs_inactive: delay to be introduced by the controller after CS is
-@@ -218,6 +219,7 @@ struct spi_device {
- 	const char		*driver_override;
- 	struct gpio_desc	*cs_gpiod[SPI_CS_CNT_MAX];	/* Chip select gpio desc */
+@@ -216,6 +217,8 @@ struct spi_device {
+ 
  	struct spi_delay	word_delay; /* Inter-word delay */
+ 
 +	bool			multi_die;	/* flash with multiple dies*/
++
  	/* CS delays */
  	struct spi_delay	cs_setup;
  	struct spi_delay	cs_hold;
-@@ -595,6 +597,7 @@ struct spi_controller {
+@@ -595,6 +598,7 @@ struct spi_controller {
  	 * assert/de-assert more than one chip select at once.
  	 */
  #define SPI_CONTROLLER_MULTI_CS		BIT(7)
@@ -2791,7 +2792,7 @@ index 71ad76693..d4b8b0259 100644
  
  	/* Flag indicating if the allocation of this struct is devres-managed */
  	bool			devm_allocated;
-@@ -970,6 +973,7 @@ struct spi_res {
+@@ -970,6 +974,7 @@ struct spi_res {
   * @len: size of rx and tx buffers (in bytes)
   * @speed_hz: Select a speed other than the device default for this
   *      transfer. If 0 the default (from @spi_device) is used.
@@ -2799,7 +2800,7 @@ index 71ad76693..d4b8b0259 100644
   * @bits_per_word: select a bits_per_word other than the device default
   *      for this transfer. If 0 the default (from @spi_device) is used.
   * @dummy_data: indicates transfer is dummy bytes transfer.
-@@ -1107,6 +1111,7 @@ struct spi_transfer {
+@@ -1107,6 +1112,7 @@ struct spi_transfer {
  	struct spi_delay	cs_change_delay;
  	struct spi_delay	word_delay;
  	u32		speed_hz;

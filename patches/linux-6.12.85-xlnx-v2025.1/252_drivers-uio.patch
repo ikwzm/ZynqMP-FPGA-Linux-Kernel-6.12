@@ -547,10 +547,10 @@ index 000000000..30200306d
 +#endif
 diff --git a/drivers/uio/uio_xilinx_ai_engine.c b/drivers/uio/uio_xilinx_ai_engine.c
 new file mode 100644
-index 000000000..acb1cb144
+index 000000000..1287e45ab
 --- /dev/null
 +++ b/drivers/uio/uio_xilinx_ai_engine.c
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,302 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Xilinx UIO driver for AI Engine
@@ -756,7 +756,9 @@ index 000000000..acb1cb144
 +	uio = platform_device_alloc(DRIVER_NAME, PLATFORM_DEVID_NONE);
 +	if (!uio)
 +		return -ENOMEM;
-+	uio->driver_override = "uio_dmem_genirq";
++	ret = device_set_driver_override(&uio->dev, "uio_dmem_genirq");
++	if (ret) 
++		goto err_out;
 +	uio->dev.parent = &pdev->dev;
 +
 +	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
