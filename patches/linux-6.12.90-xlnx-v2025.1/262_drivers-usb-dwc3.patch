@@ -192,7 +192,7 @@ index 124eda252..86a233b44 100644
  
  ifneq ($(CONFIG_USB_DWC3_DUAL_ROLE),)
 diff --git a/drivers/usb/dwc3/core.c b/drivers/usb/dwc3/core.c
-index 526b6a1fa..31c14ed4b 100644
+index 2cdb073af..40fcf699f 100644
 --- a/drivers/usb/dwc3/core.c
 +++ b/drivers/usb/dwc3/core.c
 @@ -83,16 +83,19 @@ static int dwc3_get_dr_mode(struct dwc3 *dwc)
