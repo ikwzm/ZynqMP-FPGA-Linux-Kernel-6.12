@@ -1,5 +1,5 @@
 diff --git a/drivers/remoteproc/xlnx_r5_remoteproc.c b/drivers/remoteproc/xlnx_r5_remoteproc.c
-index 6a64e5909..f286cb18f 100644
+index d1c069704..cebfc67a5 100644
 --- a/drivers/remoteproc/xlnx_r5_remoteproc.c
 +++ b/drivers/remoteproc/xlnx_r5_remoteproc.c
 @@ -267,6 +267,9 @@ static struct mbox_info *zynqmp_r5_setup_mbox(struct device *cdev)

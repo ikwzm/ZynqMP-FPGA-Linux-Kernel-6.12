@@ -77,7 +77,7 @@ index 45d1153a0..6c72465e6 100644
  	return 0;
  }
 diff --git a/drivers/mtd/spi-nor/core.c b/drivers/mtd/spi-nor/core.c
-index a3e6a8c28..cad32856b 100644
+index d666e044b..7b56a91b0 100644
 --- a/drivers/mtd/spi-nor/core.c
 +++ b/drivers/mtd/spi-nor/core.c
 @@ -21,6 +21,7 @@
@@ -1870,7 +1870,7 @@ index a3e6a8c28..cad32856b 100644
  }
  
 diff --git a/drivers/mtd/spi-nor/core.h b/drivers/mtd/spi-nor/core.h
-index 1516b6d0d..023fb693d 100644
+index df07ded38..07e0688b1 100644
 --- a/drivers/mtd/spi-nor/core.h
 +++ b/drivers/mtd/spi-nor/core.h
 @@ -18,6 +18,12 @@
@@ -1936,7 +1936,7 @@ index 1516b6d0d..023fb693d 100644
  	u8				rdsr_addr_nbytes;
  	u8				n_banks;
  	u8				n_dice;
-@@ -472,6 +491,11 @@ struct spi_nor_id {
+@@ -478,6 +497,11 @@ struct spi_nor_id {
   *   SPI_NOR_NO_ERASE:        no erase command needed.
   *   SPI_NOR_QUAD_PP:         flash supports Quad Input Page Program.
   *   SPI_NOR_RWW:             flash supports reads while write.
@@ -1948,7 +1948,7 @@ index 1516b6d0d..023fb693d 100644
   *
   * @no_sfdp_flags:  flags that indicate support that can be discovered via SFDP.
   *                  Used when SFDP tables are not defined in the flash. These
-@@ -498,6 +522,9 @@ struct spi_nor_id {
+@@ -504,6 +528,9 @@ struct spi_nor_id {
   * @mfr_flags:      manufacturer private flags. Used in the manufacturer fixup
   *                  hooks to differentiate support between flashes of the same
   *                  manufacturer.
@@ -1958,7 +1958,7 @@ index 1516b6d0d..023fb693d 100644
   * @otp_org:        flash's OTP organization.
   * @fixups:         part specific fixup hooks.
   */
-@@ -518,8 +545,13 @@ struct flash_info {
+@@ -524,8 +551,13 @@ struct flash_info {
  #define SPI_NOR_BP3_SR_BIT6		BIT(4)
  #define SPI_NOR_SWP_IS_VOLATILE		BIT(5)
  #define SPI_NOR_NO_ERASE		BIT(6)
@@ -1974,7 +1974,7 @@ index 1516b6d0d..023fb693d 100644
  
  	u8 no_sfdp_flags;
  #define SPI_NOR_SKIP_SFDP		BIT(0)
-@@ -535,6 +567,9 @@ struct flash_info {
+@@ -541,6 +573,9 @@ struct flash_info {
  #define SPI_NOR_IO_MODE_EN_VOLATILE	BIT(1)
  
  	u8 mfr_flags;
@@ -3412,7 +3412,7 @@ index 9a729aa34..16a9a0375 100644
  
  	if (WARN_ON(!is_power_of_2(spi_nor_otp_region_len(nor))))
 diff --git a/drivers/mtd/spi-nor/sfdp.c b/drivers/mtd/spi-nor/sfdp.c
-index 5b1117265..41c0a111f 100644
+index 20b791568..aef99fbf0 100644
 --- a/drivers/mtd/spi-nor/sfdp.c
 +++ b/drivers/mtd/spi-nor/sfdp.c
 @@ -432,7 +432,7 @@ static void spi_nor_regions_sort_erase_types(struct spi_nor_erase_map *map)
@@ -3442,7 +3442,7 @@ index 5b1117265..41c0a111f 100644
  	}
  }
  
-@@ -833,7 +835,8 @@ spi_nor_region_check_overlay(struct spi_nor_erase_region *region,
+@@ -859,7 +861,8 @@ spi_nor_region_check_overlay(struct spi_nor_erase_region *region,
  static int spi_nor_init_non_uniform_erase_map(struct spi_nor *nor,
  					      const u32 *smpt)
  {
@@ -3452,7 +3452,7 @@ index 5b1117265..41c0a111f 100644
  	struct spi_nor_erase_type *erase = map->erase_type;
  	struct spi_nor_erase_region *region;
  	u64 offset;
-@@ -922,6 +925,7 @@ static int spi_nor_init_non_uniform_erase_map(struct spi_nor *nor,
+@@ -948,6 +951,7 @@ static int spi_nor_init_non_uniform_erase_map(struct spi_nor *nor,
  static int spi_nor_parse_smpt(struct spi_nor *nor,
  			      const struct sfdp_parameter_header *smpt_header)
  {
@@ -3460,7 +3460,7 @@ index 5b1117265..41c0a111f 100644
  	const u32 *sector_map;
  	u32 *smpt;
  	size_t len;
-@@ -952,7 +956,7 @@ static int spi_nor_parse_smpt(struct spi_nor *nor,
+@@ -978,7 +982,7 @@ static int spi_nor_parse_smpt(struct spi_nor *nor,
  	if (ret)
  		goto out;
  
@@ -3469,7 +3469,7 @@ index 5b1117265..41c0a111f 100644
  	/* fall through */
  out:
  	kfree(smpt);
-@@ -994,7 +998,7 @@ static int spi_nor_parse_4bait(struct spi_nor *nor,
+@@ -1020,7 +1024,7 @@ static int spi_nor_parse_4bait(struct spi_nor *nor,
  		{ 0u /* not used */,		BIT(11) },
  		{ 0u /* not used */,		BIT(12) },
  	};
@@ -3478,7 +3478,7 @@ index 5b1117265..41c0a111f 100644
  	struct spi_nor_pp_command *params_pp = params->page_programs;
  	struct spi_nor_erase_map *map = &params->erase_map;
  	struct spi_nor_erase_type *erase_type = map->erase_type;
-@@ -1157,6 +1161,7 @@ static int spi_nor_parse_4bait(struct spi_nor *nor,
+@@ -1183,6 +1187,7 @@ static int spi_nor_parse_4bait(struct spi_nor *nor,
  static int spi_nor_parse_profile1(struct spi_nor *nor,
  				  const struct sfdp_parameter_header *profile1_header)
  {
@@ -3486,7 +3486,7 @@ index 5b1117265..41c0a111f 100644
  	u32 *dwords, addr;
  	size_t len;
  	int ret;
-@@ -1179,14 +1184,14 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
+@@ -1205,14 +1210,14 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
  
  	 /* Set the Read Status Register dummy cycles and dummy address bytes. */
  	if (dwords[SFDP_DWORD(1)] & PROFILE1_DWORD1_RDSR_DUMMY)
@@ -3505,7 +3505,7 @@ index 5b1117265..41c0a111f 100644
  
  	/*
  	 * We don't know what speed the controller is running at. Find the
-@@ -1215,8 +1220,8 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
+@@ -1241,8 +1246,8 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
  	dummy = round_up(dummy, 2);
  
  	/* Update the fast read settings. */
@@ -3516,7 +3516,7 @@ index 5b1117265..41c0a111f 100644
  				  0, dummy, opcode,
  				  SNOR_PROTO_8_8_8_DTR);
  
-@@ -1224,7 +1229,7 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
+@@ -1250,7 +1255,7 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
  	 * Page Program is "Required Command" in the xSPI Profile 1.0. Update
  	 * the params->hwcaps.mask here.
  	 */
@@ -3525,7 +3525,7 @@ index 5b1117265..41c0a111f 100644
  
  out:
  	kfree(dwords);
-@@ -1245,7 +1250,7 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
+@@ -1271,7 +1276,7 @@ static int spi_nor_parse_profile1(struct spi_nor *nor,
  static int spi_nor_parse_sccr(struct spi_nor *nor,
  			      const struct sfdp_parameter_header *sccr_header)
  {
@@ -3534,7 +3534,7 @@ index 5b1117265..41c0a111f 100644
  	u32 *dwords, addr;
  	size_t len;
  	int ret;
-@@ -1296,7 +1301,7 @@ static int spi_nor_parse_sccr(struct spi_nor *nor,
+@@ -1322,7 +1327,7 @@ static int spi_nor_parse_sccr(struct spi_nor *nor,
  static int spi_nor_parse_sccr_mc(struct spi_nor *nor,
  				 const struct sfdp_parameter_header *sccr_mc_header)
  {
@@ -3543,7 +3543,7 @@ index 5b1117265..41c0a111f 100644
  	u32 *dwords, addr;
  	u8 i, n_dice;
  	size_t len;
-@@ -1545,7 +1550,15 @@ int spi_nor_parse_sfdp(struct spi_nor *nor)
+@@ -1571,7 +1576,15 @@ int spi_nor_parse_sfdp(struct spi_nor *nor)
  			break;
  
  		case SFDP_4BAIT_ID:
@@ -4100,7 +4100,7 @@ index db02c14ba..bc7cf5934 100644
  	}
  };
 diff --git a/drivers/mtd/spi-nor/swp.c b/drivers/mtd/spi-nor/swp.c
-index fdc411f2a..2d9fd305d 100644
+index 7208be75d..54250f81d 100644
 --- a/drivers/mtd/spi-nor/swp.c
 +++ b/drivers/mtd/spi-nor/swp.c
 @@ -7,6 +7,7 @@
@@ -4120,7 +4120,7 @@ index fdc411f2a..2d9fd305d 100644
  
  	if (nor->flags & SNOR_F_HAS_4BIT_BP)
  		return mask | SR_BP3;
-@@ -33,15 +36,22 @@ static u8 spi_nor_get_sr_tb_mask(struct spi_nor *nor)
+@@ -35,15 +38,22 @@ static u8 spi_nor_get_sr_tb_mask(struct spi_nor *nor)
  
  static u64 spi_nor_get_min_prot_length_sr(struct spi_nor *nor)
  {
@@ -4144,7 +4144,7 @@ index fdc411f2a..2d9fd305d 100644
  	/* Reserved one for "protect none" and one for "protect all". */
  	bp_slots = (1 << hweight8(mask)) - 2;
  	bp_slots_needed = ilog2(n_sectors);
-@@ -55,11 +65,15 @@ static u64 spi_nor_get_min_prot_length_sr(struct spi_nor *nor)
+@@ -57,11 +67,15 @@ static u64 spi_nor_get_min_prot_length_sr(struct spi_nor *nor)
  static void spi_nor_get_locked_range_sr(struct spi_nor *nor, u8 sr, loff_t *ofs,
  					u64 *len)
  {
@@ -4160,7 +4160,7 @@ index fdc411f2a..2d9fd305d 100644
  	if (nor->flags & SNOR_F_HAS_SR_BP3_BIT6 && val & SR_BP3_BIT6)
  		val = (val & ~SR_BP3_BIT6) | SR_BP3;
  
-@@ -75,13 +89,13 @@ static void spi_nor_get_locked_range_sr(struct spi_nor *nor, u8 sr, loff_t *ofs,
+@@ -77,13 +91,13 @@ static void spi_nor_get_locked_range_sr(struct spi_nor *nor, u8 sr, loff_t *ofs,
  	min_prot_len = spi_nor_get_min_prot_length_sr(nor);
  	*len = min_prot_len << (bp - 1);
  
@@ -4177,7 +4177,7 @@ index fdc411f2a..2d9fd305d 100644
  }
  
  /*
-@@ -156,6 +170,7 @@ static bool spi_nor_is_unlocked_sr(struct spi_nor *nor, loff_t ofs, u64 len,
+@@ -158,6 +172,7 @@ static bool spi_nor_is_unlocked_sr(struct spi_nor *nor, loff_t ofs, u64 len,
   */
  static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  {
@@ -4185,7 +4185,7 @@ index fdc411f2a..2d9fd305d 100644
  	u64 min_prot_len;
  	int ret, status_old, status_new;
  	u8 mask = spi_nor_get_sr_bp_mask(nor);
-@@ -180,7 +195,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -182,7 +197,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  		can_be_bottom = false;
  
  	/* If anything above us is unlocked, we can't use 'top' protection */
@@ -4194,7 +4194,7 @@ index fdc411f2a..2d9fd305d 100644
  				  status_old))
  		can_be_top = false;
  
-@@ -192,11 +207,11 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -194,11 +209,11 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  
  	/* lock_len: length of region that should end up locked */
  	if (use_top)
@@ -4208,7 +4208,7 @@ index fdc411f2a..2d9fd305d 100644
  		val = mask;
  	} else {
  		min_prot_len = spi_nor_get_min_prot_length_sr(nor);
-@@ -205,6 +220,9 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -207,6 +222,9 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  
  		if (nor->flags & SNOR_F_HAS_SR_BP3_BIT6 && val & SR_BP3)
  			val = (val & ~SR_BP3) | SR_BP3_BIT6;
@@ -4218,7 +4218,7 @@ index fdc411f2a..2d9fd305d 100644
  
  		if (val & ~mask)
  			return -EINVAL;
-@@ -224,7 +242,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -226,7 +244,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  	if (!(nor->flags & SNOR_F_NO_WP))
  		status_new |= SR_SRWD;
  
@@ -4227,7 +4227,7 @@ index fdc411f2a..2d9fd305d 100644
  		status_new |= tb_mask;
  
  	/* Don't bother if they're the same */
-@@ -238,6 +256,26 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -240,6 +258,26 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
  	return spi_nor_write_sr_and_check(nor, status_new);
  }
  
@@ -4254,7 +4254,7 @@ index fdc411f2a..2d9fd305d 100644
  /*
   * Unlock a region of the flash. See spi_nor_sr_lock() for more info
   *
-@@ -245,6 +283,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -247,6 +285,7 @@ static int spi_nor_sr_lock(struct spi_nor *nor, loff_t ofs, u64 len)
   */
  static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  {
@@ -4262,7 +4262,7 @@ index fdc411f2a..2d9fd305d 100644
  	u64 min_prot_len;
  	int ret, status_old, status_new;
  	u8 mask = spi_nor_get_sr_bp_mask(nor);
-@@ -265,12 +304,13 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -267,12 +306,13 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  		return 0;
  
  	/* If anything below us is locked, we can't use 'top' protection */
@@ -4279,7 +4279,7 @@ index fdc411f2a..2d9fd305d 100644
  		can_be_bottom = false;
  
  	if (!can_be_bottom && !can_be_top)
-@@ -281,7 +321,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -283,7 +323,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  
  	/* lock_len: length of region that should remain locked */
  	if (use_top)
@@ -4288,7 +4288,7 @@ index fdc411f2a..2d9fd305d 100644
  	else
  		lock_len = ofs;
  
-@@ -294,6 +334,9 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -296,6 +336,9 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  
  		if (nor->flags & SNOR_F_HAS_SR_BP3_BIT6 && val & SR_BP3)
  			val = (val & ~SR_BP3) | SR_BP3_BIT6;
@@ -4298,7 +4298,7 @@ index fdc411f2a..2d9fd305d 100644
  
  		/* Some power-of-two sizes are not supported */
  		if (val & ~mask)
-@@ -306,7 +349,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -308,7 +351,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  	if (lock_len == 0)
  		status_new &= ~SR_SRWD;
  
@@ -4307,7 +4307,7 @@ index fdc411f2a..2d9fd305d 100644
  		status_new |= tb_mask;
  
  	/* Don't bother if they're the same */
-@@ -346,41 +389,139 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
+@@ -348,41 +391,139 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
  
  void spi_nor_init_default_locking_ops(struct spi_nor *nor)
  {
@@ -4451,7 +4451,7 @@ index fdc411f2a..2d9fd305d 100644
  	struct spi_nor *nor = mtd_to_spi_nor(mtd);
  	int ret;
  
-@@ -388,12 +529,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -390,12 +531,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
  	if (ret)
  		return ret;
  
@@ -4486,7 +4486,7 @@ index fdc411f2a..2d9fd305d 100644
  /**
   * spi_nor_try_unlock_all() - Tries to unlock the entire flash memory array.
   * @nor:	pointer to a 'struct spi_nor'.
-@@ -408,23 +570,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -410,23 +572,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
   */
  void spi_nor_try_unlock_all(struct spi_nor *nor)
  {
