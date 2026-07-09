@@ -133,7 +133,7 @@ index 9bf0fb17a..c3d2866f6 100644
              # I2C Touch-Screen Controller
            - ti,tsc2003
 diff --git a/drivers/spi/spi-cadence-quadspi.c b/drivers/spi/spi-cadence-quadspi.c
-index 72262b6fb..9bc41bfbc 100644
+index da8401261..a03fb04ad 100644
 --- a/drivers/spi/spi-cadence-quadspi.c
 +++ b/drivers/spi/spi-cadence-quadspi.c
 @@ -29,9 +29,11 @@
@@ -927,7 +927,7 @@ index 72262b6fb..9bc41bfbc 100644
  	if (cqspi->use_direct_mode) {
  		ret = cqspi_request_mmap_dma(cqspi);
  		if (ret == -EPROBE_DEFER)
-@@ -2031,6 +2485,17 @@ static void cqspi_remove(struct platform_device *pdev)
+@@ -2032,6 +2486,17 @@ static void cqspi_remove(struct platform_device *pdev)
  static int cqspi_runtime_suspend(struct device *dev)
  {
  	struct cqspi_st *cqspi = dev_get_drvdata(dev);
@@ -945,7 +945,7 @@ index 72262b6fb..9bc41bfbc 100644
  
  	cqspi_controller_enable(cqspi, 0);
  	clk_disable_unprepare(cqspi->clk);
-@@ -2074,6 +2539,22 @@ static int cqspi_resume(struct device *dev)
+@@ -2075,6 +2540,22 @@ static int cqspi_resume(struct device *dev)
  		dev_err(dev, "pm_runtime_force_resume failed on resume\n");
  		return ret;
  	}
@@ -968,7 +968,7 @@ index 72262b6fb..9bc41bfbc 100644
  
  	return spi_controller_resume(cqspi->host);
  }
-@@ -2109,7 +2590,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
+@@ -2110,7 +2591,18 @@ static const struct cqspi_driver_platdata socfpga_qspi = {
  
  static const struct cqspi_driver_platdata versal_ospi = {
  	.hwcaps_mask = CQSPI_SUPPORTS_OCTAL,
@@ -988,7 +988,7 @@ index 72262b6fb..9bc41bfbc 100644
  	.indirect_read_dma = cqspi_versal_indirect_read_dma,
  	.get_dma_status = cqspi_get_versal_dma_status,
  };
-@@ -2166,6 +2658,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
+@@ -2167,6 +2659,10 @@ static const struct of_device_id cqspi_dt_ids[] = {
  		.compatible = "mobileye,eyeq5-ospi",
  		.data = &mobileye_eyeq5_ospi,
  	},

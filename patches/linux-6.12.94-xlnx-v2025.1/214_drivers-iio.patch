@@ -3370,7 +3370,7 @@ index e12eb7137..74e6857fe 100644
  	}
  
 diff --git a/drivers/iio/adc/xilinx-xadc-core.c b/drivers/iio/adc/xilinx-xadc-core.c
-index cfbfcaefe..53340bedf 100644
+index a17e25d31..639b751c5 100644
 --- a/drivers/iio/adc/xilinx-xadc-core.c
 +++ b/drivers/iio/adc/xilinx-xadc-core.c
 @@ -391,8 +391,7 @@ static int xadc_zynq_setup(struct platform_device *pdev,

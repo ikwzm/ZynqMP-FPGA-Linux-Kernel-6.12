@@ -956,7 +956,7 @@ index ebf03468f..ef3d76713 100644
  }
  
 diff --git a/drivers/usb/dwc3/dwc3-xilinx.c b/drivers/usb/dwc3/dwc3-xilinx.c
-index 47e891c92..ed1df80b5 100644
+index 939783e4a..3bd88e969 100644
 --- a/drivers/usb/dwc3/dwc3-xilinx.c
 +++ b/drivers/usb/dwc3/dwc3-xilinx.c
 @@ -11,6 +11,7 @@
@@ -1066,8 +1066,8 @@ index 47e891c92..ed1df80b5 100644
 +		.always_on = 0,
 +		.valid_ops_mask = REGULATOR_CHANGE_STATUS,
 +	},
-+};
-+
+ };
+ 
 +static int dwc3_zynqmp_power_req(struct device *dev, bool on)
 +{
 +	u32 reg, retries;
@@ -1277,8 +1277,8 @@ index 47e891c92..ed1df80b5 100644
 +	.enable			= dwc3_xlnx_reg_enable,
 +	.disable		= dwc3_xlnx_reg_disable,
 +	.is_enabled		= dwc3_xlnx_reg_is_enabled,
- };
- 
++};
++
 +static int dwc3_xlnx_register_regulator(struct device *dev,
 +					struct dwc3_xlnx *priv_data)
 +{
@@ -1413,7 +1413,17 @@ index 47e891c92..ed1df80b5 100644
  	hibrst = devm_reset_control_get_exclusive(dev, "usb_hibrst");
  	if (IS_ERR(hibrst)) {
  		ret = PTR_ERR(hibrst);
-@@ -219,29 +595,91 @@ static int dwc3_xlnx_init_zynqmp(struct dwc3_xlnx *priv_data)
+@@ -205,7 +581,8 @@ static int dwc3_xlnx_init_zynqmp(struct dwc3_xlnx *priv_data)
+ 	/* ulpi reset via gpio-modepin or gpio-framework driver */
+ 	reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+ 	if (IS_ERR(reset_gpio)) {
+-		ret = PTR_ERR(reset_gpio);
++		ret = dev_err_probe(dev, PTR_ERR(reset_gpio),
++				     "Failed to request reset GPIO\n");
+ 		goto err_phy_power_off;
+ 	}
+ 
+@@ -215,16 +592,7 @@ static int dwc3_xlnx_init_zynqmp(struct dwc3_xlnx *priv_data)
  		usleep_range(5000, 10000);
  	}
  
@@ -1427,9 +1437,11 @@ index 47e891c92..ed1df80b5 100644
 -		reg |= XLNX_USB_TRAFFIC_ROUTE_FPD;
 -		writel(reg, priv_data->regs + XLNX_USB_TRAFFIC_ROUTE_CONFIG);
 -	}
--
 +	dwc3_xlnx_set_coherency(priv_data, XLNX_USB_TRAFFIC_ROUTE_CONFIG);
- err:
+ 
+ 	return 0;
+ 
+@@ -236,14 +604,86 @@ static int dwc3_xlnx_init_zynqmp(struct dwc3_xlnx *priv_data)
  	return ret;
  }
  
@@ -1518,7 +1530,7 @@ index 47e891c92..ed1df80b5 100644
  	},
  	{ /* Sentinel */ }
  };
-@@ -277,24 +715,83 @@ static int dwc3_xlnx_probe(struct platform_device *pdev)
+@@ -279,24 +719,83 @@ static int dwc3_xlnx_probe(struct platform_device *pdev)
  	struct dwc3_xlnx		*priv_data;
  	struct device			*dev = &pdev->dev;
  	struct device_node		*np = dev->of_node;
@@ -1608,7 +1620,7 @@ index 47e891c92..ed1df80b5 100644
  	platform_set_drvdata(pdev, priv_data);
  
  	ret = devm_clk_bulk_get_all(priv_data->dev, &priv_data->clks);
-@@ -307,7 +804,7 @@ static int dwc3_xlnx_probe(struct platform_device *pdev)
+@@ -309,7 +808,7 @@ static int dwc3_xlnx_probe(struct platform_device *pdev)
  	if (ret)
  		return ret;
  
@@ -1617,7 +1629,7 @@ index 47e891c92..ed1df80b5 100644
  	if (ret)
  		goto err_clk_put;
  
-@@ -348,6 +845,13 @@ static void dwc3_xlnx_remove(struct platform_device *pdev)
+@@ -350,6 +849,13 @@ static void dwc3_xlnx_remove(struct platform_device *pdev)
  
  	of_platform_depopulate(dev);
  
@@ -1631,7 +1643,7 @@ index 47e891c92..ed1df80b5 100644
  	clk_bulk_disable_unprepare(priv_data->num_clocks, priv_data->clks);
  	priv_data->num_clocks = 0;
  
-@@ -383,11 +887,18 @@ static int __maybe_unused dwc3_xlnx_suspend(struct device *dev)
+@@ -385,11 +891,18 @@ static int __maybe_unused dwc3_xlnx_suspend(struct device *dev)
  {
  	struct dwc3_xlnx *priv_data = dev_get_drvdata(dev);
  
@@ -1653,7 +1665,7 @@ index 47e891c92..ed1df80b5 100644
  	return 0;
  }
  
-@@ -396,6 +907,15 @@ static int __maybe_unused dwc3_xlnx_resume(struct device *dev)
+@@ -398,6 +911,15 @@ static int __maybe_unused dwc3_xlnx_resume(struct device *dev)
  	struct dwc3_xlnx *priv_data = dev_get_drvdata(dev);
  	int ret;
  

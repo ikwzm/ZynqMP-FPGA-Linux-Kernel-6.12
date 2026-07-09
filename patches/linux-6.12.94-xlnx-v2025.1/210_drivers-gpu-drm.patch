@@ -33803,10 +33803,10 @@ index 1565a7dd4..20eac03e8 100644
  	return 0;
  
 diff --git a/include/drm/display/drm_dp.h b/include/drm/display/drm_dp.h
-index 3bd9f482f..e0f9587ca 100644
+index dd218400a..42a885324 100644
 --- a/include/drm/display/drm_dp.h
 +++ b/include/drm/display/drm_dp.h
-@@ -1158,6 +1158,7 @@
+@@ -1159,6 +1159,7 @@
  
  /* Extended Receiver Capability: See DP_DPCD_REV for definitions */
  #define DP_DP13_DPCD_REV                    0x2200
