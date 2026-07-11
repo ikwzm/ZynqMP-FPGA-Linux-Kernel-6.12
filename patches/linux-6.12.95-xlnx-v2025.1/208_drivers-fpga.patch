@@ -727,10 +727,10 @@ index 0f4035b08..0a7988291 100644
  subsys_initcall(fpga_mgr_class_init);
  module_exit(fpga_mgr_class_exit);
 diff --git a/drivers/fpga/of-fpga-region.c b/drivers/fpga/of-fpga-region.c
-index efc35dad6..42fd2c42b 100644
+index cbf6cece2..2370aa8c8 100644
 --- a/drivers/fpga/of-fpga-region.c
 +++ b/drivers/fpga/of-fpga-region.c
-@@ -230,6 +230,16 @@ of_fpga_region_parse_ov(struct fpga_region *region,
+@@ -229,6 +229,16 @@ of_fpga_region_parse_ov(struct fpga_region *region,
  	if (of_property_read_bool(overlay, "encrypted-fpga-config"))
  		info->flags |= FPGA_MGR_ENCRYPTED_BITSTREAM;
  
