@@ -1144,7 +1144,7 @@ index 1594d9e9e..584a14a01 100644
  };
  
 diff --git a/drivers/pci/controller/pcie-xilinx-nwl.c b/drivers/pci/controller/pcie-xilinx-nwl.c
-index 2e7356c28..63494b67e 100644
+index 4f01602ad..7226f10cf 100644
 --- a/drivers/pci/controller/pcie-xilinx-nwl.c
 +++ b/drivers/pci/controller/pcie-xilinx-nwl.c
 @@ -19,7 +19,6 @@

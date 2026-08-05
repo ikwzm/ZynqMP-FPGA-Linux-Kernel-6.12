@@ -164,10 +164,10 @@ index 000000000..3aa753c6a
 +        };
 +    };
 diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
-index 216f3c9ce..e049718bc 100644
+index 57fc8f0de..2e0282682 100644
 --- a/drivers/iio/adc/Kconfig
 +++ b/drivers/iio/adc/Kconfig
-@@ -617,6 +617,18 @@ config INA2XX_ADC
+@@ -618,6 +618,18 @@ config INA2XX_ADC
  	  Say yes here to build support for TI INA2xx family of Power Monitors.
  	  This driver is mutually exclusive with the HWMON version.
  
@@ -186,7 +186,7 @@ index 216f3c9ce..e049718bc 100644
  config INGENIC_ADC
  	tristate "Ingenic JZ47xx SoCs ADC driver"
  	depends on MIPS || COMPILE_TEST
-@@ -1648,4 +1660,34 @@ config XILINX_AMS
+@@ -1649,4 +1661,34 @@ config XILINX_AMS
  	  The driver can also be built as a module. If so, the module will be called
  	  xilinx-ams.
  
@@ -2923,7 +2923,7 @@ index 000000000..9453a5463
 +void sysmon_set_iio_dev_info(struct iio_dev *indio_dev);
 +int sysmon_create_avg_en_sysfs_entries(struct iio_dev *indio_dev);
 diff --git a/drivers/iio/adc/xilinx-ams.c b/drivers/iio/adc/xilinx-ams.c
-index e12eb7137..74e6857fe 100644
+index 7d6820c6e..870112577 100644
 --- a/drivers/iio/adc/xilinx-ams.c
 +++ b/drivers/iio/adc/xilinx-ams.c
 @@ -117,22 +117,30 @@
@@ -3165,7 +3165,7 @@ index e12eb7137..74e6857fe 100644
  	case AMS_ALARM_BIT_TEMP_REMOTE:
  		scan_index += AMS_SEQ_TEMP_REMOTE;
  		break;
-@@ -874,18 +927,21 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
+@@ -877,18 +930,21 @@ static const struct iio_chan_spec *ams_event_to_channel(struct iio_dev *dev,
  	return &dev->channels[i];
  }
  
@@ -3190,7 +3190,7 @@ index e12eb7137..74e6857fe 100644
  	case AMS_SEQ_SUPPLY1:
  		return BIT(AMS_ALARM_BIT_SUPPLY1 + bit);
  	case AMS_SEQ_SUPPLY2:
-@@ -909,7 +965,9 @@ static int ams_get_alarm_mask(int scan_index)
+@@ -912,7 +968,9 @@ static int ams_get_alarm_mask(int scan_index)
  	case AMS_SEQ_VCCAMS:
  		return BIT(AMS_ALARM_BIT_VCCAMS + bit);
  	case AMS_SEQ_TEMP_REMOTE:
@@ -3201,7 +3201,7 @@ index e12eb7137..74e6857fe 100644
  	default:
  		return 0;
  	}
-@@ -922,7 +980,7 @@ static int ams_read_event_config(struct iio_dev *indio_dev,
+@@ -925,7 +983,7 @@ static int ams_read_event_config(struct iio_dev *indio_dev,
  {
  	struct ams *ams = iio_priv(indio_dev);
  
@@ -3210,7 +3210,7 @@ index e12eb7137..74e6857fe 100644
  }
  
  static int ams_write_event_config(struct iio_dev *indio_dev,
-@@ -932,9 +990,9 @@ static int ams_write_event_config(struct iio_dev *indio_dev,
+@@ -935,9 +993,9 @@ static int ams_write_event_config(struct iio_dev *indio_dev,
  				  int state)
  {
  	struct ams *ams = iio_priv(indio_dev);
@@ -3222,7 +3222,7 @@ index e12eb7137..74e6857fe 100644
  
  	mutex_lock(&ams->lock);
  
-@@ -957,7 +1015,7 @@ static int ams_read_event_value(struct iio_dev *indio_dev,
+@@ -960,7 +1018,7 @@ static int ams_read_event_value(struct iio_dev *indio_dev,
  				enum iio_event_info info, int *val, int *val2)
  {
  	struct ams *ams = iio_priv(indio_dev);
@@ -3231,7 +3231,7 @@ index e12eb7137..74e6857fe 100644
  
  	mutex_lock(&ams->lock);
  
-@@ -984,7 +1042,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
+@@ -987,7 +1045,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
  
  	/* Set temperature channel threshold to direct threshold */
  	if (chan->type == IIO_TEMP) {
@@ -3240,7 +3240,7 @@ index e12eb7137..74e6857fe 100644
  
  		if (chan->scan_index >= AMS_PS_SEQ_MAX)
  			ams_pl_update_reg(ams, offset,
-@@ -996,7 +1054,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
+@@ -999,7 +1057,7 @@ static int ams_write_event_value(struct iio_dev *indio_dev,
  					  AMS_ALARM_THR_DIRECT_MASK);
  	}
  
@@ -3249,7 +3249,7 @@ index e12eb7137..74e6857fe 100644
  	if (chan->scan_index >= AMS_PS_SEQ_MAX)
  		writel(val, ams->pl_base + offset);
  	else
-@@ -1018,11 +1076,21 @@ static void ams_handle_event(struct iio_dev *indio_dev, u32 event)
+@@ -1023,11 +1081,21 @@ static void ams_handle_event(struct iio_dev *indio_dev, u32 event)
  		 * The temperature channel only supports over-temperature
  		 * events.
  		 */
@@ -3276,7 +3276,7 @@ index e12eb7137..74e6857fe 100644
  	} else {
  		/*
  		 * For other channels we don't know whether it is a upper or
-@@ -1074,27 +1142,37 @@ static irqreturn_t ams_irq(int irq, void *data)
+@@ -1079,27 +1147,37 @@ static irqreturn_t ams_irq(int irq, void *data)
  {
  	struct iio_dev *indio_dev = data;
  	struct ams *ams = iio_priv(indio_dev);
@@ -3318,7 +3318,7 @@ index e12eb7137..74e6857fe 100644
  
  	schedule_delayed_work(&ams->ams_unmask_work,
  			      msecs_to_jiffies(AMS_UNMASK_TIMEOUT_MS));
-@@ -1110,6 +1188,11 @@ static const struct iio_event_spec ams_temp_events[] = {
+@@ -1115,6 +1193,11 @@ static const struct iio_event_spec ams_temp_events[] = {
  		.dir = IIO_EV_DIR_RISING,
  		.mask_separate = BIT(IIO_EV_INFO_ENABLE) | BIT(IIO_EV_INFO_VALUE),
  	},
@@ -3330,7 +3330,7 @@ index e12eb7137..74e6857fe 100644
  };
  
  static const struct iio_event_spec ams_voltage_events[] = {
-@@ -1316,10 +1399,11 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
+@@ -1321,10 +1404,11 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
  			/* set threshold to max and min for each channel */
  			falling_off =
  				ams_get_alarm_offset(ams_channels[i].scan_index,
@@ -3344,7 +3344,7 @@ index e12eb7137..74e6857fe 100644
  			if (ams_channels[i].scan_index >= AMS_PS_SEQ_MAX) {
  				writel(AMS_ALARM_THR_MIN,
  				       ams->pl_base + falling_off);
-@@ -1331,6 +1415,24 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
+@@ -1336,6 +1420,24 @@ static int ams_parse_firmware(struct iio_dev *indio_dev)
  				writel(AMS_ALARM_THR_MAX,
  				       ams->ps_base + rising_off);
  			}

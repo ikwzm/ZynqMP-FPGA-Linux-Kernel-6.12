@@ -1954,7 +1954,7 @@ index 994afa5a0..dc5241bb4 100644
  }
  
 diff --git a/drivers/gpu/drm/drm_edid.c b/drivers/gpu/drm/drm_edid.c
-index 9edb3247c..dd54d64de 100644
+index b6f597af0..8e7593b94 100644
 --- a/drivers/gpu/drm/drm_edid.c
 +++ b/drivers/gpu/drm/drm_edid.c
 @@ -3008,6 +3008,57 @@ mode_is_rb(const struct drm_display_mode *mode)

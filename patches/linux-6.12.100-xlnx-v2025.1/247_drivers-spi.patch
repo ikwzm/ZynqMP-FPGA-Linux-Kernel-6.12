@@ -1012,7 +1012,7 @@ index ff9f2e9ab..7bf0b2145 100644
  		xfers[xferpos].speed_hz = op->max_freq;
  		spi_message_add_tail(&xfers[xferpos], &msg);
 diff --git a/drivers/spi/spi-xilinx.c b/drivers/spi/spi-xilinx.c
-index f5e41813b..a0268ee65 100644
+index 9eef5688d..a0268ee65 100644
 --- a/drivers/spi/spi-xilinx.c
 +++ b/drivers/spi/spi-xilinx.c
 @@ -1,6 +1,6 @@
@@ -1373,7 +1373,7 @@ index f5e41813b..a0268ee65 100644
  
  	if (spi->mode & SPI_CS_HIGH)
  		xspi->cs_inactive &= ~BIT(spi_get_chipselect(spi, 0));
-@@ -235,218 +352,361 @@ static int xilinx_spi_setup_transfer(struct spi_device *spi,
+@@ -235,225 +352,361 @@ static int xilinx_spi_setup_transfer(struct spi_device *spi,
  	return 0;
  }
  
@@ -1417,57 +1417,9 @@ index f5e41813b..a0268ee65 100644
 -		xspi->write_fn(XIPIF_V123B_GINTR_ENABLE,
 -				xspi->regs + XIPIF_V123B_DGIER_OFFSET);
 -		reinit_completion(&xspi->done);
+-	}
 +	int ret;
 +	struct xilinx_spi *xqspi = spi_controller_get_devdata(qspi->controller);
-+
-+	if (qspi->controller->busy)
-+		return -EBUSY;
-+
-+	ret = pm_runtime_get_sync(xqspi->dev);
-+	if (ret < 0)
-+		return ret;
-+
-+	ret = xilinx_spi_setup_transfer(qspi, NULL);
-+	pm_runtime_put_sync(xqspi->dev);
-+
-+	return ret;
-+}
-+
-+/**
-+ * xspi_start_transfer - Initiates the SPI transfer
-+ * @ctlr:	Pointer to the spi_ controller structure which provides
-+ *		information about the controller.
-+ * @qspi:	Pointer to the spi_device structure
-+ * @transfer:	Pointer to the spi_transfer structure which provide information
-+ *		about next transfer parameters
-+ *
-+ * This function fills the TX FIFO, starts the SPI transfer, and waits for the
-+ * transfer to be completed.
-+ *
-+ * Return:	Number of bytes transferred in the last transfer
-+ */
-+
-+static int xspi_start_transfer(struct spi_controller *ctlr,
-+			       struct spi_device *qspi,
-+			       struct spi_transfer *transfer)
-+{
-+	struct xilinx_spi *xqspi = spi_controller_get_devdata(ctlr);
-+	u32 cr;
-+
-+	xqspi->tx_ptr = transfer->tx_buf;
-+	xqspi->rx_ptr = transfer->rx_buf;
-+
-+	if (transfer->dummy) {
-+		xqspi->bytes_to_transfer = (transfer->len - (transfer->dummy / 8))
-+							+ ((transfer->dummy / 8) *
-+							xqspi->rx_bus_width);
-+		xqspi->bytes_to_receive = (transfer->len - (transfer->dummy / 8))
-+							+ ((transfer->dummy / 8) *
-+							xqspi->rx_bus_width);
-+	} else {
-+		xqspi->bytes_to_transfer = transfer->len;
-+		xqspi->bytes_to_receive = transfer->len;
- 	}
  
 -	while (remaining_words) {
 -		int n_words, tx_words, rx_words;
@@ -1511,6 +1463,72 @@ index f5e41813b..a0268ee65 100644
 -				xspi_init_hw(xspi);
 -				return -EIO;
 -			}
++	if (qspi->controller->busy)
++		return -EBUSY;
+ 
+-			if ((sr & XSPI_SR_TX_EMPTY_MASK) && (rx_words > 1)) {
+-				xilinx_spi_rx(xspi);
+-				rx_words--;
+-				continue;
+-			}
++	ret = pm_runtime_get_sync(xqspi->dev);
++	if (ret < 0)
++		return ret;
+ 
+-			sr = xspi->read_fn(xspi->regs + XSPI_SR_OFFSET);
+-			if (!(sr & XSPI_SR_RX_EMPTY_MASK)) {
+-				xilinx_spi_rx(xspi);
+-				rx_words--;
+-			}
+-		}
++	ret = xilinx_spi_setup_transfer(qspi, NULL);
++	pm_runtime_put_sync(xqspi->dev);
+ 
+-		remaining_words -= n_words;
+-	}
++	return ret;
++}
+ 
+-	if (use_irq) {
+-		xspi->write_fn(0, xspi->regs + XIPIF_V123B_DGIER_OFFSET);
+-		xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
++/**
++ * xspi_start_transfer - Initiates the SPI transfer
++ * @ctlr:	Pointer to the spi_ controller structure which provides
++ *		information about the controller.
++ * @qspi:	Pointer to the spi_device structure
++ * @transfer:	Pointer to the spi_transfer structure which provide information
++ *		about next transfer parameters
++ *
++ * This function fills the TX FIFO, starts the SPI transfer, and waits for the
++ * transfer to be completed.
++ *
++ * Return:	Number of bytes transferred in the last transfer
++ */
++
++static int xspi_start_transfer(struct spi_controller *ctlr,
++			       struct spi_device *qspi,
++			       struct spi_transfer *transfer)
++{
++	struct xilinx_spi *xqspi = spi_controller_get_devdata(ctlr);
++	u32 cr;
++
++	xqspi->tx_ptr = transfer->tx_buf;
++	xqspi->rx_ptr = transfer->rx_buf;
++
++	if (transfer->dummy) {
++		xqspi->bytes_to_transfer = (transfer->len - (transfer->dummy / 8))
++							+ ((transfer->dummy / 8) *
++							xqspi->rx_bus_width);
++		xqspi->bytes_to_receive = (transfer->len - (transfer->dummy / 8))
++							+ ((transfer->dummy / 8) *
++							xqspi->rx_bus_width);
++	} else {
++		xqspi->bytes_to_transfer = transfer->len;
++		xqspi->bytes_to_receive = transfer->len;
+ 	}
+ 
+-	return t->len;
 +	xilinx_spi_setup_transfer(qspi, transfer);
 +	cr = xqspi->read_fn(xqspi->regs + XSPI_CR_OFFSET);
 +	/* Enable master transaction inhibit */
@@ -1524,13 +1542,8 @@ index f5e41813b..a0268ee65 100644
 +			xqspi->regs + XIPIF_V123B_DGIER_OFFSET);
 +
 +	return transfer->len;
-+}
+ }
  
--			if ((sr & XSPI_SR_TX_EMPTY_MASK) && (rx_words > 1)) {
--				xilinx_spi_rx(xspi);
--				rx_words--;
--				continue;
--			}
 +/**
 + * xspi_prepare_transfer_hardware -	Prepares hardware for transfer.
 + * @ctlr:	Pointer to the spi_controller structure which provides
@@ -1544,12 +1557,10 @@ index f5e41813b..a0268ee65 100644
 +{
 +	struct xilinx_spi *xqspi = spi_controller_get_devdata(ctlr);
  
--			sr = xspi->read_fn(xspi->regs + XSPI_SR_OFFSET);
--			if (!(sr & XSPI_SR_RX_EMPTY_MASK)) {
--				xilinx_spi_rx(xspi);
--				rx_words--;
--			}
--		}
+-/* This driver supports single host mode only. Hence Tx FIFO Empty
+- * is the only interrupt we care about.
+- * Receive FIFO Overrun, Transmit FIFO Underrun, Mode Fault, and Target Mode
+- * Fault are not to happen.
 +	u32 cr;
 +	int ret;
 +
@@ -1572,17 +1583,25 @@ index f5e41813b..a0268ee65 100644
 + * This function disables the SPI master controller.
 + *
 + * Return:	Always 0
-+ */
+  */
+-static irqreturn_t xilinx_spi_irq(int irq, void *dev_id)
 +static int xspi_unprepare_transfer_hardware(struct spi_controller *ctlr)
-+{
+ {
+-	struct xilinx_spi *xspi = dev_id;
+-	u32 ipif_isr;
 +	struct xilinx_spi *xqspi = spi_controller_get_devdata(ctlr);
 +	u32 cr;
  
--		remaining_words -= n_words;
+-	/* Get the IPIF interrupts, and clear them immediately */
+-	ipif_isr = xspi->read_fn(xspi->regs + XIPIF_V123B_IISR_OFFSET);
+-	xspi->write_fn(ipif_isr, xspi->regs + XIPIF_V123B_IISR_OFFSET);
 +	cr = xqspi->read_fn(xqspi->regs + XSPI_CR_OFFSET);
 +	cr &= ~XSPI_CR_ENABLE;
 +	xqspi->write_fn(cr, xqspi->regs + XSPI_CR_OFFSET);
-+
+ 
+-	if (ipif_isr & XSPI_INTR_TX_EMPTY) {	/* Transmission completed */
+-		complete(&xspi->done);
+-		return IRQ_HANDLED;
 +	pm_runtime_put_sync(xqspi->dev);
 +
 +	return 0;
@@ -1608,12 +1627,11 @@ index f5e41813b..a0268ee65 100644
 +		return ret;
  	}
  
--	if (use_irq) {
--		xspi->write_fn(0, xspi->regs + XIPIF_V123B_DGIER_OFFSET);
--		xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
+-	return IRQ_NONE;
 +	return 0;
-+}
-+
+ }
+ 
+-static int xilinx_spi_find_buffer_size(struct xilinx_spi *xspi)
 +/**
 + * xilinx_spi_runtime_suspend - Runtime suspend method for the SPI driver
 + * @dev:	Address of the platform_device structure
@@ -1623,12 +1641,26 @@ index f5e41813b..a0268ee65 100644
 + * Return:	Always 0
 + */
 +static int __maybe_unused xilinx_spi_runtime_suspend(struct device *dev)
-+{
+ {
+-	u8 sr;
+-	int n_words = 0;
 +	struct spi_controller *ctlr = dev_get_drvdata(dev);
 +	struct xilinx_spi *xspi = spi_controller_get_devdata(ctlr);
-+
+ 
+-	/*
+-	 * Before the buffer_size detection we reset the core
+-	 * to make sure we start with a clean state.
+-	 */
+-	xspi->write_fn(XIPIF_V123B_RESET_MASK,
+-		xspi->regs + XIPIF_V123B_RESETR_OFFSET);
 +	clk_bulk_disable_unprepare(xspi->num_clocks, xspi->clks);
-+
+ 
+-	/* Fill the Tx FIFO with as many words as possible */
+-	while (1) {
+-		xspi->write_fn(0, xspi->regs + XSPI_TXD_OFFSET);
+-		sr = xspi->read_fn(xspi->regs + XSPI_SR_OFFSET);
+-		if (sr & XSPI_SR_TX_FULL_MASK)
+-			break;
 +	return 0;
 +}
 +
@@ -1646,21 +1678,30 @@ index f5e41813b..a0268ee65 100644
 +	struct spi_controller *ctlr = dev_get_drvdata(dev);
 +	struct xilinx_spi *xspi = spi_controller_get_devdata(ctlr);
 +	int ret = 0;
-+
+ 
+-		n_words++;
 +	if (!pm_runtime_suspended(dev)) {
 +		ret = xilinx_spi_runtime_resume(dev);
 +		if (ret < 0)
 +			return ret;
  	}
  
--	return t->len;
+-	/* Handle the NO FIFO case separately */
+-	if (!n_words)
+-		return 1;
 +	ret = spi_controller_resume(ctlr);
 +	if (ret < 0)
 +		clk_bulk_disable_unprepare(xspi->num_clocks, xspi->clks);
-+
+ 
+-	return n_words;
 +	return ret;
  }
  
+-static const struct of_device_id xilinx_spi_of_match[] = {
+-	{ .compatible = "xlnx,axi-quad-spi-1.00.a", },
+-	{ .compatible = "xlnx,xps-spi-2.00.a", },
+-	{ .compatible = "xlnx,xps-spi-2.00.b", },
+-	{}
 +/**
 + * xilinx_spi_suspend - Suspend method for the SPI driver
 + * @dev:	Address of the platform_device structure
@@ -1680,8 +1721,7 @@ index f5e41813b..a0268ee65 100644
 +
 +	if (!pm_runtime_suspended(dev))
 +		xilinx_spi_runtime_suspend(dev);
- 
--/* This driver supports single host mode only. Hence Tx FIFO Empty
++
 +	xspi_unprepare_transfer_hardware(ctlr);
 +
 +	return ret;
@@ -1691,92 +1731,20 @@ index f5e41813b..a0268ee65 100644
 +	SET_RUNTIME_PM_OPS(xilinx_spi_runtime_suspend,
 +			   xilinx_spi_runtime_resume, NULL)
 +	SET_SYSTEM_SLEEP_PM_OPS(xilinx_spi_suspend, xilinx_spi_resume)
-+};
-+
-+/* This driver supports single master mode only. Hence Tx FIFO Empty
-  * is the only interrupt we care about.
-- * Receive FIFO Overrun, Transmit FIFO Underrun, Mode Fault, and Target Mode
-+ * Receive FIFO Overrun, Transmit FIFO Underrun, Mode Fault, and Slave Mode
-  * Fault are not to happen.
-  */
- static irqreturn_t xilinx_spi_irq(int irq, void *dev_id)
- {
--	struct xilinx_spi *xspi = dev_id;
-+	struct spi_controller *ctlr = dev_id;
-+	struct xilinx_spi *xspi = spi_controller_get_devdata(dev_id);
- 	u32 ipif_isr;
-+	u32 cr;
-+	irqreturn_t status = IRQ_NONE;
- 
- 	/* Get the IPIF interrupts, and clear them immediately */
- 	ipif_isr = xspi->read_fn(xspi->regs + XIPIF_V123B_IISR_OFFSET);
- 	xspi->write_fn(ipif_isr, xspi->regs + XIPIF_V123B_IISR_OFFSET);
- 
--	if (ipif_isr & XSPI_INTR_TX_EMPTY) {	/* Transmission completed */
--		complete(&xspi->done);
--		return IRQ_HANDLED;
--	}
--
--	return IRQ_NONE;
--}
-+	cr = xspi->read_fn(xspi->regs + XSPI_CR_OFFSET);
-+	/* Enable master transaction inhibit */
-+	cr |= XSPI_CR_TRANS_INHIBIT;
-+	xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
- 
--static int xilinx_spi_find_buffer_size(struct xilinx_spi *xspi)
--{
--	u8 sr;
--	int n_words = 0;
-+	if (ipif_isr & XSPI_INTR_TX_EMPTY)  {
-+		/* Transmission completed */
-+		xspi->rx_fifo(xspi);
-+		if (xspi->bytes_to_transfer) {
-+			/* There is more data to send */
-+			xspi->tx_fifo(xspi);
-+		}
-+		status = IRQ_HANDLED;
-+	}
- 
--	/*
--	 * Before the buffer_size detection we reset the core
--	 * to make sure we start with a clean state.
--	 */
--	xspi->write_fn(XIPIF_V123B_RESET_MASK,
--		xspi->regs + XIPIF_V123B_RESETR_OFFSET);
-+	if (!xspi->bytes_to_receive && !xspi->bytes_to_transfer) {
-+		/* Disable the interrupts here. */
-+		xspi->write_fn(0x0, xspi->regs + XIPIF_V123B_DGIER_OFFSET);
-+		spi_finalize_current_transfer(ctlr);
-+	}
- 
--	/* Fill the Tx FIFO with as many words as possible */
--	do {
--		xspi->write_fn(0, xspi->regs + XSPI_TXD_OFFSET);
--		sr = xspi->read_fn(xspi->regs + XSPI_SR_OFFSET);
--		n_words++;
--	} while (!(sr & XSPI_SR_TX_FULL_MASK));
-+	/* Disable master transaction inhibit */
-+	cr &= ~XSPI_CR_TRANS_INHIBIT;
-+	xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
- 
--	return n_words;
-+	return status;
- }
--
--static const struct of_device_id xilinx_spi_of_match[] = {
--	{ .compatible = "xlnx,axi-quad-spi-1.00.a", },
--	{ .compatible = "xlnx,xps-spi-2.00.a", },
--	{ .compatible = "xlnx,xps-spi-2.00.b", },
--	{}
--};
+ };
 -MODULE_DEVICE_TABLE(of, xilinx_spi_of_match);
--
- static int xilinx_spi_probe(struct platform_device *pdev)
+ 
+-static int xilinx_spi_probe(struct platform_device *pdev)
++/* This driver supports single master mode only. Hence Tx FIFO Empty
++ * is the only interrupt we care about.
++ * Receive FIFO Overrun, Transmit FIFO Underrun, Mode Fault, and Slave Mode
++ * Fault are not to happen.
++ */
++static irqreturn_t xilinx_spi_irq(int irq, void *dev_id)
  {
- 	struct xilinx_spi *xspi;
+-	struct xilinx_spi *xspi;
 -	struct xspi_platform_data *pdata;
- 	struct resource *res;
+-	struct resource *res;
 -	int ret, num_cs = 0, bits_per_word;
 -	struct spi_controller *host;
 -	bool force_irq = false;
@@ -1796,13 +1764,51 @@ index f5e41813b..a0268ee65 100644
 -					   &bits_per_word);
 -		if (ret)
 -			bits_per_word = 8;
--	}
--
++	struct spi_controller *ctlr = dev_id;
++	struct xilinx_spi *xspi = spi_controller_get_devdata(dev_id);
++	u32 ipif_isr;
++	u32 cr;
++	irqreturn_t status = IRQ_NONE;
++
++	/* Get the IPIF interrupts, and clear them immediately */
++	ipif_isr = xspi->read_fn(xspi->regs + XIPIF_V123B_IISR_OFFSET);
++	xspi->write_fn(ipif_isr, xspi->regs + XIPIF_V123B_IISR_OFFSET);
++
++	cr = xspi->read_fn(xspi->regs + XSPI_CR_OFFSET);
++	/* Enable master transaction inhibit */
++	cr |= XSPI_CR_TRANS_INHIBIT;
++	xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
++
++	if (ipif_isr & XSPI_INTR_TX_EMPTY)  {
++		/* Transmission completed */
++		xspi->rx_fifo(xspi);
++		if (xspi->bytes_to_transfer) {
++			/* There is more data to send */
++			xspi->tx_fifo(xspi);
++		}
++		status = IRQ_HANDLED;
+ 	}
+ 
 -	if (!num_cs) {
 -		dev_err(&pdev->dev,
 -			"Missing target select configuration data\n");
 -		return -EINVAL;
--	}
++	if (!xspi->bytes_to_receive && !xspi->bytes_to_transfer) {
++		/* Disable the interrupts here. */
++		xspi->write_fn(0x0, xspi->regs + XIPIF_V123B_DGIER_OFFSET);
++		spi_finalize_current_transfer(ctlr);
+ 	}
+ 
++	/* Disable master transaction inhibit */
++	cr &= ~XSPI_CR_TRANS_INHIBIT;
++	xspi->write_fn(cr, xspi->regs + XSPI_CR_OFFSET);
++
++	return status;
++}
++static int xilinx_spi_probe(struct platform_device *pdev)
++{
++	struct xilinx_spi *xspi;
++	struct resource *res;
 +	int ret;
 +	u32 num_cs = 0, bits_per_word = 8;
 +	u32 cs_num;
@@ -1816,7 +1822,7 @@ index f5e41813b..a0268ee65 100644
 +			 "Missing num-cs optional property, assuming default as <1>\n");
 +	if (!num_cs)
 +		num_cs = 1;
- 
++
  	if (num_cs > XILINX_SPI_MAX_CS) {
 -		dev_err(&pdev->dev, "Invalid number of spi targets\n");
 +		dev_err(&pdev->dev, "Invalid number of spi slaves\n");
@@ -1904,7 +1910,7 @@ index f5e41813b..a0268ee65 100644
  
  	/*
  	 * Detect endianess on the IP via loop bit in CR. Detection
-@@ -466,68 +726,127 @@ static int xilinx_spi_probe(struct platform_device *pdev)
+@@ -473,68 +726,127 @@ static int xilinx_spi_probe(struct platform_device *pdev)
  		xspi->write_fn = xspi_write32_be;
  	}
  
@@ -2844,7 +2850,7 @@ index 143c572b2..cf74589b4 100644
  	ret = spi_register_controller(ctlr);
  	if (ret) {
 diff --git a/drivers/spi/spi.c b/drivers/spi/spi.c
-index 5a6c2f567..944ff48f3 100644
+index 319d38344..d8a97fff3 100644
 --- a/drivers/spi/spi.c
 +++ b/drivers/spi/spi.c
 @@ -2484,6 +2484,9 @@ static int of_spi_parse_dt(struct spi_controller *ctlr, struct spi_device *spi,

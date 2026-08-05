@@ -3567,7 +3567,7 @@ index 20b791568..aef99fbf0 100644
  
  		case SFDP_PROFILE1_ID:
 diff --git a/drivers/mtd/spi-nor/spansion.c b/drivers/mtd/spi-nor/spansion.c
-index fcd081b75..69ba7fd80 100644
+index 36407ea90..5f0cbf61d 100644
 --- a/drivers/mtd/spi-nor/spansion.c
 +++ b/drivers/mtd/spi-nor/spansion.c
 @@ -17,7 +17,6 @@
@@ -3880,7 +3880,7 @@ index fcd081b75..69ba7fd80 100644
  
  	/* Fast Read 4B requires mode cycles */
  	params->reads[SNOR_CMD_READ_FAST].num_mode_clocks = 8;
-@@ -702,7 +732,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
+@@ -704,7 +734,7 @@ static int cypress_nor_set_octal_dtr(struct spi_nor *nor, bool enable)
  
  static int s28hx_t_post_sfdp_fixup(struct spi_nor *nor)
  {
@@ -3889,7 +3889,7 @@ index fcd081b75..69ba7fd80 100644
  
  	if (!params->n_dice || !params->vreg_offset) {
  		dev_err(nor->dev, "%s failed. The volatile register offset could not be retrieved from SFDP.\n",
-@@ -746,15 +776,12 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
+@@ -748,15 +778,12 @@ static int s28hx_t_post_bfpt_fixup(struct spi_nor *nor,
  				   const struct sfdp_parameter_header *bfpt_header,
  				   const struct sfdp_bfpt *bfpt)
  {
@@ -3906,7 +3906,7 @@ index fcd081b75..69ba7fd80 100644
  
  	params->set_octal_dtr = cypress_nor_set_octal_dtr;
  	params->ready = cypress_nor_sr_ready_and_clear;
-@@ -763,24 +790,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
+@@ -765,24 +792,44 @@ static int s28hx_t_late_init(struct spi_nor *nor)
  	return 0;
  }
  
@@ -3952,7 +3952,7 @@ index fcd081b75..69ba7fd80 100644
  
  	return 0;
  }
-@@ -825,6 +872,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -827,6 +874,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl256s0",
  		.size = SZ_32M,
  		.sector_size = SZ_256K,
@@ -3960,7 +3960,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SPI_NOR_SKIP_SFDP | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -838,6 +886,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -840,6 +888,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x02, 0x19, 0x4d, 0x01, 0x80),
  		.name = "s25fl256s1",
  		.size = SZ_32M,
@@ -3968,7 +3968,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -851,7 +900,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -853,7 +902,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl512s",
  		.size = SZ_64M,
  		.sector_size = SZ_256K,
@@ -3977,7 +3977,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -876,6 +925,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -878,6 +927,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.name = "s25fl128s0",
  		.size = SZ_16M,
  		.sector_size = SZ_256K,
@@ -3985,7 +3985,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -889,6 +939,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -891,6 +941,7 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x20, 0x18, 0x4d, 0x01, 0x80),
  		.name = "s25fl128s1",
  		.size = SZ_16M,
@@ -3993,7 +3993,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.mfr_flags = USE_CLSR,
  	}, {
-@@ -933,18 +984,21 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -935,18 +986,21 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x01, 0x60, 0x17),
  		.name = "s25fl064l",
  		.size = SZ_8M,
@@ -4015,7 +4015,7 @@ index fcd081b75..69ba7fd80 100644
  		.no_sfdp_flags = SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ,
  		.fixup_flags = SPI_NOR_4B_OPCODES,
  	}, {
-@@ -966,6 +1020,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -968,6 +1022,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2a, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hl02gt",
@@ -4023,7 +4023,7 @@ index fcd081b75..69ba7fd80 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -986,6 +1041,7 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -988,6 +1043,7 @@ static const struct flash_info spansion_nor_parts[] = {
  	}, {
  		.id = SNOR_ID(0x34, 0x2b, 0x1c, 0x0f, 0x00, 0x90),
  		.name = "s25hs02gt",
@@ -4031,7 +4031,7 @@ index fcd081b75..69ba7fd80 100644
  		.mfr_flags = USE_CLPEF,
  		.fixups = &s25hx_t_fixups
  	}, {
-@@ -1016,7 +1072,8 @@ static const struct flash_info spansion_nor_parts[] = {
+@@ -1018,7 +1074,8 @@ static const struct flash_info spansion_nor_parts[] = {
  		.id = SNOR_ID(0x34, 0x5b, 0x1c),
  		.name = "s28hs02gt",
  		.mfr_flags = USE_CLPEF,
@@ -4041,7 +4041,7 @@ index fcd081b75..69ba7fd80 100644
  	}, {
  		.id = SNOR_ID(0xef, 0x40, 0x13),
  		.name = "s25fl004k",
-@@ -1081,7 +1138,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
+@@ -1083,7 +1140,7 @@ static int spansion_nor_sr_ready_and_clear(struct spi_nor *nor)
  
  static int spansion_nor_late_init(struct spi_nor *nor)
  {
@@ -4106,7 +4106,7 @@ index db02c14ba..bc7cf5934 100644
  	}
  };
 diff --git a/drivers/mtd/spi-nor/swp.c b/drivers/mtd/spi-nor/swp.c
-index 7208be75d..54250f81d 100644
+index 686ca5728..a0981c171 100644
 --- a/drivers/mtd/spi-nor/swp.c
 +++ b/drivers/mtd/spi-nor/swp.c
 @@ -7,6 +7,7 @@
@@ -4285,16 +4285,16 @@ index 7208be75d..54250f81d 100644
  		can_be_bottom = false;
  
  	if (!can_be_bottom && !can_be_top)
-@@ -283,7 +323,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
- 
- 	/* lock_len: length of region that should remain locked */
- 	if (use_top)
+@@ -290,7 +330,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+ 	if (can_be_top && can_be_bottom)
+ 		lock_len = 0;
+ 	else if (use_top)
 -		lock_len = nor->params->size - (ofs + len);
 +		lock_len = mtd->size - (ofs + len);
  	else
  		lock_len = ofs;
  
-@@ -296,6 +336,9 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -303,6 +343,9 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  
  		if (nor->flags & SNOR_F_HAS_SR_BP3_BIT6 && val & SR_BP3)
  			val = (val & ~SR_BP3) | SR_BP3_BIT6;
@@ -4304,7 +4304,7 @@ index 7208be75d..54250f81d 100644
  
  		/* Some power-of-two sizes are not supported */
  		if (val & ~mask)
-@@ -308,7 +351,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
+@@ -315,7 +358,7 @@ static int spi_nor_sr_unlock(struct spi_nor *nor, loff_t ofs, u64 len)
  	if (lock_len == 0)
  		status_new &= ~SR_SRWD;
  
@@ -4313,7 +4313,7 @@ index 7208be75d..54250f81d 100644
  		status_new |= tb_mask;
  
  	/* Don't bother if they're the same */
-@@ -348,41 +391,139 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
+@@ -355,41 +398,139 @@ static const struct spi_nor_locking_ops spi_nor_sr_locking_ops = {
  
  void spi_nor_init_default_locking_ops(struct spi_nor *nor)
  {
@@ -4457,7 +4457,7 @@ index 7208be75d..54250f81d 100644
  	struct spi_nor *nor = mtd_to_spi_nor(mtd);
  	int ret;
  
-@@ -390,12 +531,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -397,12 +538,33 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
  	if (ret)
  		return ret;
  
@@ -4492,7 +4492,7 @@ index 7208be75d..54250f81d 100644
  /**
   * spi_nor_try_unlock_all() - Tries to unlock the entire flash memory array.
   * @nor:	pointer to a 'struct spi_nor'.
-@@ -410,23 +572,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
+@@ -417,23 +579,35 @@ static int spi_nor_is_locked(struct mtd_info *mtd, loff_t ofs, u64 len)
   */
  void spi_nor_try_unlock_all(struct spi_nor *nor)
  {

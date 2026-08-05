@@ -170,7 +170,7 @@ index a572d15f6..6074d59c0 100644
  	}
  
 diff --git a/drivers/soc/xilinx/zynqmp_power.c b/drivers/soc/xilinx/zynqmp_power.c
-index ae59bf166..5f4d12aba 100644
+index 84ef7c87d..75a0aa1c9 100644
 --- a/drivers/soc/xilinx/zynqmp_power.c
 +++ b/drivers/soc/xilinx/zynqmp_power.c
 @@ -319,7 +319,7 @@ static int zynqmp_pm_probe(struct platform_device *pdev)
