@@ -1922,7 +1922,7 @@ index fd36b8fd5..57e4626aa 100644
  		*val = state->content_protection;
  	} else if (property == config->hdcp_content_type_property) {
 diff --git a/drivers/gpu/drm/drm_connector.c b/drivers/gpu/drm/drm_connector.c
-index 994afa5a0..dc5241bb4 100644
+index 6c1a49fe9..a6b4ab700 100644
 --- a/drivers/gpu/drm/drm_connector.c
 +++ b/drivers/gpu/drm/drm_connector.c
 @@ -1531,6 +1531,14 @@ EXPORT_SYMBOL(drm_hdmi_connector_get_output_format_name);
@@ -33830,7 +33830,7 @@ index 57e3b18c1..9b516b65b 100644
  					 const struct drm_connector_state *conn_state);
  
 diff --git a/include/drm/drm_connector.h b/include/drm/drm_connector.h
-index 1e2b25e20..b781b70b5 100644
+index 03289a06f..7ea3a5f19 100644
 --- a/include/drm/drm_connector.h
 +++ b/include/drm/drm_connector.h
 @@ -1134,6 +1134,12 @@ struct drm_connector_state {

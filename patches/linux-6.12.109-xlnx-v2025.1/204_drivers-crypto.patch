@@ -12,10 +12,10 @@ index 8aead97a5..a7062a041 100644
    The ZynqMP AES-GCM hardened cryptographic accelerator is used to
    encrypt or decrypt the data with provided key and initialization vector.
 diff --git a/drivers/crypto/Kconfig b/drivers/crypto/Kconfig
-index 08b1238bc..eb6e28da7 100644
+index 481be45ab..c99e3afc7 100644
 --- a/drivers/crypto/Kconfig
 +++ b/drivers/crypto/Kconfig
-@@ -714,12 +714,36 @@ config CRYPTO_DEV_TEGRA
+@@ -713,12 +713,36 @@ config CRYPTO_DEV_TEGRA
  	  Select this to enable Tegra Security Engine which accelerates various
  	  AES encryption/decryption and HASH algorithms.
  
@@ -53,7 +53,7 @@ index 08b1238bc..eb6e28da7 100644
  	help
  	  Xilinx ZynqMP has AES-GCM engine used for symmetric key
  	  encryption and decryption. This driver interfaces with AES hw
-@@ -736,6 +760,18 @@ config CRYPTO_DEV_ZYNQMP_SHA3
+@@ -735,6 +759,18 @@ config CRYPTO_DEV_ZYNQMP_SHA3
  	  Select this if you want to use the ZynqMP module
  	  for SHA3 hash computation.
  

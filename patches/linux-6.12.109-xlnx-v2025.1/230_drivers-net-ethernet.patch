@@ -584,7 +584,7 @@ index 2847278d9..6a5da7823 100644
  /* struct macb_dma_desc - Hardware DMA descriptor
   * @addr: DMA address of data buffer
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
-index fbf8d0ba9..d884754c5 100644
+index 67b16aca5..e5aaed41b 100644
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
 @@ -29,6 +29,7 @@
@@ -841,7 +841,7 @@ index fbf8d0ba9..d884754c5 100644
  	return err;
  }
  
-@@ -5062,6 +5133,16 @@ static const struct macb_config versal_config = {
+@@ -5080,6 +5151,16 @@ static const struct macb_config versal_config = {
  	.usrio = &macb_default_usrio,
  };
  
@@ -858,7 +858,7 @@ index fbf8d0ba9..d884754c5 100644
  static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "cdns,at91sam9260-macb", .data = &at91sam9260_config },
  	{ .compatible = "cdns,macb" },
-@@ -5085,6 +5166,7 @@ static const struct of_device_id macb_dt_ids[] = {
+@@ -5103,6 +5184,7 @@ static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "xlnx,zynqmp-gem", .data = &zynqmp_config},
  	{ .compatible = "xlnx,zynq-gem", .data = &zynq_config },
  	{ .compatible = "xlnx,versal-gem", .data = &versal_config},

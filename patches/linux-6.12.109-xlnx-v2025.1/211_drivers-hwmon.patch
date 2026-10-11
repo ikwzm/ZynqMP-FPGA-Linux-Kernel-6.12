@@ -1,0 +1,20 @@
+diff --git a/Documentation/devicetree/bindings/hwmon/pmbus/ti,ucd90320.yaml b/Documentation/devicetree/bindings/hwmon/pmbus/ti,ucd90320.yaml
+index e8feee38c..f8bea1c0e 100644
+--- a/Documentation/devicetree/bindings/hwmon/pmbus/ti,ucd90320.yaml
++++ b/Documentation/devicetree/bindings/hwmon/pmbus/ti,ucd90320.yaml
+@@ -28,6 +28,15 @@ properties:
+   reg:
+     maxItems: 1
+ 
++  gpio-controller: true
++
++  gpio-line-names:
++    minItems: 84
++    maxItems: 84
++
++  '#gpio-cells':
++    const: 1
++
+ required:
+   - compatible
+   - reg
