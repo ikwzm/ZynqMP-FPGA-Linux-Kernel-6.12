@@ -7770,4 +7770,9 @@ shell$ git checkout -b linux-6.12.109-xlnx-v2025.1-2
 shell$ patch -p1 < ../patches/linux-6.12.100-xlnx-v2025.1/226_drivers-misc-fix.patch 
 patching file include/linux/xlnx-ai-engine.h
 patching file include/uapi/linux/xlnx-ai-engine.h
+```
 
+```console
+shell$ git add --all
+shell$ git commit -m '[patch] 226_drivers-misc-fix.patch'
+shell$ git diff HEAD^ > ../patches/linux-6.12.109-xlnx-v2025.1/226_drivers-misc-fix.patch
