@@ -17,6 +17,12 @@ shell$ sh ../patches/linux-6.12.100-xlnx-v2025.1/origin_patch.sh
 shell$ cd ..
 ```
 
+### Get linux-6.12.40-xlnx-v2025.2
+
+```console
+shell$ git clone --depth 1 -b xlnx_rebase_v6.12_LTS_2025.2 https://github.com/Xilinx/linux-xlnx.git linux-6.12.40-xlnx-v2025.2
+```
+
 ### Get linux-6.12.109
 
 ```console
@@ -6606,6 +6612,550 @@ diff -p linux-6.12.100/drivers/usb/gadget/function/f_tcm.c linux-6.12.100-xlnx-v
   static int tcm_bind(struct usb_configuration *c, struct usb_function *f)
   {
   	struct f_uas		*fu = to_f_uas(f);
+```
+
+###### 262_drivers-usb-dwc3.patch
+
+```console
+shell$ cd linux-6.12.109-xlnx-v2025.1
+shell$ git checkout v6.12.109
+shell$ git checkout -b linux-6.12.109-xlnx-v2025.1-dwc3
+  :
+```
+
+####### drivers/usb/dwc3/Makefile
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/Makefile drivers/usb/dwc3/Makefile
+```
+
+####### drivers/usb/dwc3/Kconfig
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/Kconfig drivers/usb/dwc3/Kconfig
+```
+
+####### drivers/usb/dwc3/core.h
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/core.h drivers/usb/dwc3/core.h
+shell$ patch drivers/usb/dwc3/core.h << 'EOT'
+--- drivers/usb/dwc3/core.h	2026-10-21 11:53:26.334620383 +0900
++++ drivers/usb/dwc3/core.h	2026-10-21 11:56:58.029561579 +0900
+@@ -1077,6 +1077,8 @@
+  * @role_switch_default_mode: default operation mode of controller while
+  *			usb role is USB_ROLE_NONE.
+  * @usb_psy: pointer to power supply interface.
++ * @vbus_draw_work: Work to set the vbus drawing limit
++ * @current_limit: How much current to draw from vbus, in milliAmperes.
+  * @usb2_phy: pointer to USB2 PHY
+  * @usb3_phy: pointer to USB3 PHY
+  * @usb2_generic_phy: pointer to array of USB2 PHYs
+@@ -1274,6 +1276,8 @@
+ 	enum usb_dr_mode	role_switch_default_mode;
+ 
+ 	struct power_supply	*usb_psy;
++	struct work_struct	vbus_draw_work;
++	unsigned int		current_limit;
+ 
+ 	u32			fladj;
+ 	u32			ref_clk_per;
+@@ -1294,6 +1298,7 @@
+ #define DWC3_IP			0x5533
+ #define DWC31_IP		0x3331
+ #define DWC32_IP		0x3332
++#define DWC4_IP			0x3430
+ 
+ 	u32			revision;
+ 
+EOT
+```
+
+####### drivers/usb/dwc3/core.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/core.c drivers/usb/dwc3/core.c
+shell$ patch drivers/usb/dwc3/core.c << 'EOT'
+--- drivers/usb/dwc3/core.c	2026-10-21 12:00:44.533368723 +0900
++++ drivers/usb/dwc3/core.c	2026-10-21 12:08:44.431965504 +0900
+@@ -25,6 +25,7 @@
+ #include <linux/of.h>
+ #include <linux/of_graph.h>
+ #include <linux/acpi.h>
++#include <linux/pci.h>
+ #include <linux/pinctrl/consumer.h>
+ #include <linux/reset.h>
+ #include <linux/bitfield.h>
+@@ -1111,6 +1112,8 @@
+ 
+ 	reg = dwc3_readl(dwc->regs, DWC3_GSNPSID);
+ 	dwc->ip = DWC3_GSNPS_ID(reg);
++	if (dwc->ip == DWC4_IP)
++		dwc->ip = DWC32_IP;
+ 
+ 	/* This should read as U3 followed by revision number */
+ 	if (DWC3_IP_IS(DWC3)) {
+@@ -1463,12 +1466,6 @@
+ 
+ 	hw_mode = DWC3_GHWPARAMS0_MODE(dwc->hwparams.hwparams0);
+ 
+-	/*
+-	 * Write Linux Version Code to our GUID register so it's easy to figure
+-	 * out which kernel version a bug was found.
+-	 */
+-	dwc3_writel(dwc->regs, DWC3_GUID, LINUX_VERSION_CODE);
+-
+ 	ret = dwc3_phy_setup(dwc);
+ 	if (ret)
+ 		return ret;
+@@ -1500,6 +1497,12 @@
+ 	if (ret)
+ 		goto err_exit_phy;
+ 
++	/*
++	 * Write Linux Version Code to our GUID register so it's easy to figure
++	 * out which kernel version a bug was found.
++	 */
++	dwc3_writel(dwc->regs, DWC3_GUID, LINUX_VERSION_CODE);
++
+ 	dwc3_core_setup_global_control(dwc);
+ 	dwc3_core_num_eps(dwc);
+ 
+@@ -2288,6 +2291,20 @@
+ 	return 0;
+ }
+ 
++static void dwc3_vbus_draw_work(struct work_struct *work)
++{
++	struct dwc3 *dwc = container_of(work, struct dwc3, vbus_draw_work);
++	union power_supply_propval val = {0};
++	int ret;
++
++	val.intval = 1000 * (dwc->current_limit);
++	ret = power_supply_set_property(dwc->usb_psy, POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &val);
++
++	if (ret < 0)
++		dev_dbg(dwc->dev, "Error (%d) setting vbus draw (%d mA)\n",
++			ret, dwc->current_limit);
++}
++
+ static struct power_supply *dwc3_get_usb_power_supply(struct dwc3 *dwc)
+ {
+ 	struct power_supply *usb_psy;
+@@ -2302,6 +2319,7 @@
+ 	if (!usb_psy)
+ 		return ERR_PTR(-EPROBE_DEFER);
+ 
++	INIT_WORK(&dwc->vbus_draw_work, dwc3_vbus_draw_work);
+ 	return usb_psy;
+ }
+ 
+@@ -2544,8 +2562,10 @@
+ 	dwc3_free_event_buffers(dwc);
+ 	dwc3_free_scratch_buffers(dwc);
+ 
+-	if (dwc->usb_psy)
++	if (dwc->usb_psy) {
++		cancel_work_sync(&dwc->vbus_draw_work);
+ 		power_supply_put(dwc->usb_psy);
++	}
+ }
+ 
+ #ifdef CONFIG_PM
+
+EOT
+```
+
+####### drivers/usb/dwc3/debugfs.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/debugfs.c drivers/usb/dwc3/debugfs.c
+```
+
+####### drivers/usb/dwc3/dwc3-xilinx.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/dwc3-xilinx.c drivers/usb/dwc3/dwc3-xilinx.c
+shell$ patch drivers/usb/dwc3/dwc3-xilinx.c << 'EOT'
+--- drivers/usb/dwc3/dwc3-xilinx.c	2026-10-21 12:22:49.663875607 +0900
++++ drivers/usb/dwc3/dwc3-xilinx.c	2026-10-21 12:37:53.645618076 +0900
+@@ -548,15 +548,13 @@
+ 	}
+ 
+ 	ret = phy_init(priv_data->usb3_phy);
+-	if (ret < 0) {
+-		phy_exit(priv_data->usb3_phy);
++	if (ret < 0)
+ 		goto err;
+-	}
+ 
+ 	ret = reset_control_deassert(apbrst);
+ 	if (ret < 0) {
+ 		dev_err(dev, "Failed to release APB reset\n");
+-		goto err;
++		goto err_phy_exit;
+ 	}
+ 
+ 	/* Set PIPE Power Present signal in FPD Power Present Register*/
+@@ -568,27 +566,25 @@
+ 	ret = reset_control_deassert(crst);
+ 	if (ret < 0) {
+ 		dev_err(dev, "Failed to release core reset\n");
+-		goto err;
++		goto err_phy_exit;
+ 	}
+ 
+ 	ret = reset_control_deassert(hibrst);
+ 	if (ret < 0) {
+ 		dev_err(dev, "Failed to release hibernation reset\n");
+-		goto err;
++		goto err_phy_exit;
+ 	}
+ 
+ 	ret = phy_power_on(priv_data->usb3_phy);
+-	if (ret < 0) {
+-		phy_exit(priv_data->usb3_phy);
+-		goto err;
+-	}
++	if (ret < 0)
++		goto err_phy_exit;
+ 
+ skip_usb3_phy:
+ 	/* ulpi reset via gpio-modepin or gpio-framework driver */
+ 	reset_gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+ 	if (IS_ERR(reset_gpio)) {
+-		return dev_err_probe(dev, PTR_ERR(reset_gpio),
+-				     "Failed to request reset GPIO\n");
++		ret = PTR_ERR(reset_gpio);
++		goto err_phy_power_off;
+ 	}
+ 
+ 	if (reset_gpio) {
+@@ -598,6 +594,13 @@
+ 	}
+ 
+ 	dwc3_xlnx_set_coherency(priv_data, XLNX_USB_TRAFFIC_ROUTE_CONFIG);
++        
++	return 0;
++
++err_phy_power_off:
++	phy_power_off(priv_data->usb3_phy);
++err_phy_exit:
++	phy_exit(priv_data->usb3_phy);
+ err:
+ 	return ret;
+ }
+EOT
+```
+
+####### drivers/usb/dwc3/ep0.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/ep0.c drivers/usb/dwc3/ep0.c
+shell$ patch drivers/usb/dwc3/ep0.c << 'EOT'
+--- drivers/usb/dwc3/ep0.c	2026-10-21 12:46:05.345165376 +0900
++++ drivers/usb/dwc3/ep0.c	2026-10-21 12:52:00.021635090 +0900
+@@ -94,6 +94,7 @@
+ 	req->request.actual	= 0;
+ 	req->request.status	= -EINPROGRESS;
+ 	req->epnum		= dep->number;
++	req->status		= DWC3_REQUEST_STATUS_QUEUED;
+ 
+ 	list_add_tail(&req->list, &dep->pending_list);
+ 
+@@ -287,7 +288,8 @@
+ 	dwc3_ep0_prepare_one_trb(dep, dwc->ep0_trb_addr, 8,
+ 			DWC3_TRBCTL_CONTROL_SETUP, false);
+ 	ret = dwc3_ep0_start_trans(dep);
+-	WARN_ON(ret < 0);
++	if (ret < 0)
++		dev_err(dwc->dev, "ep0 out start transfer failed: %d\n", ret);
+ }
+ 
+ static struct dwc3_ep *dwc3_wIndex_to_dep(struct dwc3 *dwc, __le16 wIndex_le)
+@@ -1081,7 +1083,9 @@
+ 		ret = dwc3_ep0_start_trans(dep);
+ 	}
+ 
+-	WARN_ON(ret < 0);
++	if (ret < 0)
++		dev_err(dwc->dev,
++			"ep0 data phase start transfer failed: %d\n", ret);
+ }
+ 
+ static int dwc3_ep0_start_control_status(struct dwc3_ep *dep)
+@@ -1098,7 +1102,12 @@
+ 
+ static void __dwc3_ep0_do_control_status(struct dwc3 *dwc, struct dwc3_ep *dep)
+ {
+-	WARN_ON(dwc3_ep0_start_control_status(dep));
++	int	ret;
++
++	ret = dwc3_ep0_start_control_status(dep);
++	if (ret)
++		dev_err(dwc->dev,
++			"ep0 status phase start transfer failed: %d\n", ret);
+ }
+ 
+ static void dwc3_ep0_do_control_status(struct dwc3 *dwc,
+@@ -1141,7 +1150,10 @@
+ 	cmd |= DWC3_DEPCMD_PARAM(dep->resource_index);
+ 	memset(&params, 0, sizeof(params));
+ 	ret = dwc3_send_gadget_ep_cmd(dep, cmd, &params);
+-	WARN_ON_ONCE(ret);
++	if (ret)
++		dev_err_ratelimited(dwc->dev,
++			"ep0 data phase end transfer failed: %d\n", ret);
++
+ 	dep->resource_index = 0;
+ }
+ 
+EOT
+```
+
+####### drivers/usb/dwc3/gadget.h
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/gadget.h drivers/usb/dwc3/gadget.h
+```
+
+####### drivers/usb/dwc3/gadget.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/gadget.c drivers/usb/dwc3/gadget.c
+shell$ patch drivers/usb/dwc3/gadget.c << 'EOT'
+--- drivers/usb/dwc3/gadget.c	2026-10-21 16:25:05.654106781 +0900
++++ drivers/usb/dwc3/gadget.c	2026-10-21 16:26:58.320480730 +0900
+@@ -229,6 +229,13 @@
+ {
+ 	struct dwc3			*dwc = dep->dwc;
+ 
++	/*
++	 * The request might have been processed and completed while the
++	 * spinlock was released. Skip processing if already completed.
++	 */
++	if (req->status == DWC3_REQUEST_STATUS_COMPLETED)
++		return;
++
+ 	dwc3_gadget_del_and_unmap_request(dep, req, status);
+ 	req->status = DWC3_REQUEST_STATUS_COMPLETED;
+ 
+@@ -1774,7 +1781,10 @@
+ 		dep->flags |= DWC3_EP_DELAY_STOP;
+ 		return 0;
+ 	}
+-	WARN_ON_ONCE(ret);
++
++	if (ret)
++		dev_err_ratelimited(dep->dwc->dev,
++				"end transfer failed: %d\n", ret);
+ 
+ 	/*
+ 	 * when transfer is stopped with force rm bit false, it can be
+@@ -3166,8 +3176,6 @@
+ static int dwc3_gadget_vbus_draw(struct usb_gadget *g, unsigned int mA)
+ {
+ 	struct dwc3		*dwc = gadget_to_dwc(g);
+-	union power_supply_propval	val = {0};
+-	int				ret;
+ 
+ 	if (dwc->usb2_phy)
+ 		return usb_phy_set_power(dwc->usb2_phy, mA);
+@@ -3175,10 +3183,10 @@
+ 	if (!dwc->usb_psy)
+ 		return -EOPNOTSUPP;
+ 
+-	val.intval = 1000 * mA;
+-	ret = power_supply_set_property(dwc->usb_psy, POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT, &val);
++	dwc->current_limit = mA;
++	schedule_work(&dwc->vbus_draw_work);
+ 
+-	return ret;
++	return 0;
+ }
+ 
+ /**
+@@ -3785,6 +3793,15 @@
+ static void dwc3_gadget_endpoint_transfer_not_ready(struct dwc3_ep *dep,
+ 		const struct dwc3_event_depevt *event)
+ {
++	/*
++	 * During a device-initiated disconnect, a late xferNotReady event can
++	 * be generated after the End Transfer command resets the event filter,
++	 * but before the controller is halted. Ignore it to prevent a new
++	 * transfer from starting.
++	 */
++	if (!dep->dwc->connected)
++		return;
++
+ 	dwc3_gadget_endpoint_frame_from_event(dep, event);
+ 
+ 	/*
+@@ -3962,6 +3979,20 @@
+ 	}
+ }
+ 
++static bool dwc3_prepare_disconnect_gadget(struct dwc3 *dwc,
++					   struct usb_gadget_driver **driver,
++					   struct usb_gadget **gadget)
++{
++	if (!dwc->async_callbacks || !dwc->gadget_driver ||
++	    !dwc->gadget_driver->disconnect)
++		return false;
++
++	*driver = dwc->gadget_driver;
++	*gadget = dwc->gadget;
++
++	return true;
++}
++
+ static void dwc3_disconnect_gadget(struct dwc3 *dwc)
+ {
+ 	if (dwc->async_callbacks && dwc->gadget_driver->disconnect) {
+@@ -3971,6 +4002,22 @@
+ 	}
+ }
+ 
++static void dwc3_disconnect_gadget_sleepable(struct dwc3 *dwc)
++{
++	struct usb_gadget_driver *driver;
++	struct usb_gadget *gadget;
++	unsigned long flags;
++
++	spin_lock_irqsave(&dwc->lock, flags);
++	if (!dwc3_prepare_disconnect_gadget(dwc, &driver, &gadget)) {
++		spin_unlock_irqrestore(&dwc->lock, flags);
++		return;
++	}
++
++	spin_unlock_irqrestore(&dwc->lock, flags);
++	driver->disconnect(gadget);
++}
++
+ static void dwc3_suspend_gadget(struct dwc3 *dwc)
+ {
+ 	if (dwc->async_callbacks && dwc->gadget_driver->suspend) {
+@@ -4014,6 +4061,7 @@
+ 	 */
+ 	if (dep->number <= 1 && dwc->ep0state != EP0_DATA_PHASE)
+ 		return;
++
+ 	if (interrupt && (dep->flags & DWC3_EP_DELAY_STOP))
+ 		return;
+ 
+@@ -4085,7 +4133,9 @@
+ 		dep->flags &= ~DWC3_EP_STALL;
+ 
+ 		ret = dwc3_send_clear_stall_ep_cmd(dep);
+-		WARN_ON_ONCE(ret);
++		if (ret)
++			dev_err_ratelimited(dwc->dev,
++				"failed to clear STALL on %s\n", dep->name);
+ 	}
+ }
+ 
+@@ -4997,7 +5047,7 @@
+ 	if (!dwc->gadget)
+ 		return;
+ 
+-	dwc3_enable_susphy(dwc, false);
++	dwc3_enable_susphy(dwc, true);
+ 	usb_del_gadget(dwc->gadget);
+ 	dwc3_gadget_free_endpoints(dwc);
+ 	usb_put_gadget(dwc->gadget);
+@@ -5010,7 +5060,6 @@
+ 
+ int dwc3_gadget_suspend(struct dwc3 *dwc)
+ {
+-	unsigned long flags;
+ 	int ret;
+ 
+ 	ret = dwc3_gadget_soft_disconnect(dwc);
+@@ -5024,10 +5073,7 @@
+ 		return -EAGAIN;
+ 	}
+ 
+-	spin_lock_irqsave(&dwc->lock, flags);
+-	if (dwc->gadget_driver)
+-		dwc3_disconnect_gadget(dwc);
+-	spin_unlock_irqrestore(&dwc->lock, flags);
++	dwc3_disconnect_gadget_sleepable(dwc);
+ 
+ 	return 0;
+ }
+EOT
+```
+
+####### drivers/usb/dwc3/gadget_hibernation.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/gadget_hibernation.c drivers/usb/dwc3/gadget_hibernation.c
+```
+
+####### drivers/usb/dwc3/host.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/host.c drivers/usb/dwc3/host.c
+shell$ patch drivers/usb/dwc3/host.c << 'EOT'
+--- drivers/usb/dwc3/host.c	2026-10-21 13:31:11.416790486 +0900
++++ drivers/usb/dwc3/host.c	2026-10-21 13:32:24.394325336 +0900
+@@ -40,7 +40,10 @@
+ 
+ 	/* xhci regs is not mapped yet, do it temperary here */
+ 	if (dwc->xhci_resources[0].start) {
+-		xhci_regs = ioremap(dwc->xhci_resources[0].start, DWC3_XHCI_REGS_END);
++		if (dwc->xhci_resources[0].flags & IORESOURCE_MEM_NONPOSTED)
++			xhci_regs = ioremap_np(dwc->xhci_resources[0].start, DWC3_XHCI_REGS_END);
++		else
++			xhci_regs = ioremap(dwc->xhci_resources[0].start, DWC3_XHCI_REGS_END);
+ 		if (!xhci_regs) {
+ 			dev_err(dwc->dev, "Failed to ioremap xhci_regs\n");
+ 			return;
+EOT
+```
+
+####### drivers/usb/dwc3/otg.h
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/otg.h drivers/usb/dwc3/otg.h
+```
+
+####### drivers/usb/dwc3/otg.c
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/otg.c drivers/usb/dwc3/otg.c
+```
+
+####### drivers/usb/dwc3/platform_data.h
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/drivers/usb/dwc3/platform_data.h drivers/usb/dwc3/platform_data.h
+```
+
+####### Documentation/devicetree/bindings/usb/dwc3-xilinx.yaml
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/Documentation/devicetree/bindings/usb/dwc3-xilinx.yaml Documentation/devicetree/bindings/usb/dwc3-xilinx.yaml
+```
+
+####### Documentation/devicetree/bindings/usb/snps,dwc3.yaml
+
+```console
+shell$ cp ../linux-6.12.40-xlnx-v2025.2/Documentation/devicetree/bindings/usb/snps,dwc3.yaml Documentation/devicetree/bindings/usb/snps,dwc3.yaml
+```
+
+####### Make 262_drivers-usb-dwc3.patch
+
+```console
+shell$ git add --all
+shell$ git commit -m '[patch] 262_drivers-usb-dwc3.patch'
+[linux-6.12.109-xlnx-v2025.1-dwc3 1690f63d4] [patch] 262_drivers-usb-dwc3.patch
+ 16 files changed, 4447 insertions(+), 127 deletions(-)
+ create mode 100644 drivers/usb/dwc3/gadget_hibernation.c
+ create mode 100644 drivers/usb/dwc3/otg.c
+ create mode 100644 drivers/usb/dwc3/otg.h
+ create mode 100644 drivers/usb/dwc3/platform_data.h
+shell$ git diff HEAD^ > ../patches/linux-6.12.109-xlnx-v2025.1/262_drivers-usb-dwc3.patch
 ```
 
 ####### Make 263_drivers-usb-gadget.patch
