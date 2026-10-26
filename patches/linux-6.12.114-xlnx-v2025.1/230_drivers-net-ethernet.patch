@@ -912,7 +912,7 @@ index 7d7dc1771..12f86dcf8 100644
 +obj-$(CONFIG_AXIENET_HAS_MCDMA) += xilinx_axienet_mcdma.o
 +obj-$(CONFIG_XILINX_AXI_EOE) += xilinx_axienet_eoe.o
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet.h b/drivers/net/ethernet/xilinx/xilinx_axienet.h
-index cbdca0fb8..88196ff69 100644
+index f9e8e83cf..493aea7cc 100644
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet.h
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet.h
 @@ -9,12 +9,15 @@
@@ -1474,13 +1474,14 @@ index cbdca0fb8..88196ff69 100644
   * @tx_packets: TX packet count for statistics
   * @tx_bytes:	TX byte count for statistics
   * @tx_stat_sync: Synchronization object for TX stats
-@@ -515,15 +945,23 @@ struct skbuf_dma_descriptor {
+@@ -515,16 +945,24 @@ struct skbuf_dma_descriptor {
   * @stats_lock: Lock for @hw_stats_seqcount
   * @stats_work: Work for reading the hardware statistics counters often enough
   *              to catch overflows.
 - * @dma_err_task: Work structure to process Axi DMA errors
-  * @stopping:   Set when @dma_err_task shouldn't do anything because we are
-  *              about to stop the device.
+  * @stopping:   Set when we are about to stop the device: makes @dma_err_task
+  *              a no-op (legacy DMA path) and fences RX descriptor
+  *              resubmission in axienet_dma_rx_cb() (dmaengine path).
 - * @tx_irq:	Axidma TX IRQ number
 - * @rx_irq:	Axidma RX IRQ number
   * @eth_irq:	Ethernet core IRQ number
@@ -1501,10 +1502,10 @@ index cbdca0fb8..88196ff69 100644
   * @max_frm_size: Stores the maximum size of the frame that can be that
   *		  Txed/Rxed in the existing hardware. If jumbo option is
   *		  supported, the maximum frame size would be 9k. Else it is
-@@ -542,6 +980,49 @@ struct skbuf_dma_descriptor {
-  * @tx_ring_tail: TX skb ring buffer tail index.
+@@ -544,6 +982,49 @@ struct skbuf_dma_descriptor {
   * @rx_ring_head: RX skb ring buffer head index.
   * @rx_ring_tail: RX skb ring buffer tail index.
+  * @rx_submit_lock: Protects RX ring resubmission vs teardown in dmaengine path.
 + * @eth_hasnobuf: Ethernet is configured in Non buf mode.
 + * @eth_hasptp: Ethernet is configured for ptp.
 + * @axienet_config: Ethernet config structure
@@ -1551,7 +1552,7 @@ index cbdca0fb8..88196ff69 100644
   */
  struct axienet_local {
  	struct net_device *ndev;
-@@ -563,29 +1044,16 @@ struct axienet_local {
+@@ -565,29 +1046,16 @@ struct axienet_local {
  
  	resource_size_t regs_start;
  	void __iomem *regs;
@@ -1586,7 +1587,7 @@ index cbdca0fb8..88196ff69 100644
  	u64 hw_stat_base[STAT_COUNT];
  	u32 hw_last_counter[STAT_COUNT];
  	seqcount_mutex_t hw_stats_seqcount;
-@@ -593,16 +1061,20 @@ struct axienet_local {
+@@ -595,16 +1063,20 @@ struct axienet_local {
  	struct delayed_work stats_work;
  	bool reset_in_progress;
  
@@ -1611,10 +1612,10 @@ index cbdca0fb8..88196ff69 100644
  
  	u32 max_frm_size;
  	u32 rxmem;
-@@ -620,6 +1092,171 @@ struct axienet_local {
- 	int tx_ring_tail;
+@@ -623,6 +1095,171 @@ struct axienet_local {
  	int rx_ring_head;
  	int rx_ring_tail;
+ 	spinlock_t rx_submit_lock;
 +	bool eth_hasnobuf;
 +	bool eth_hasptp;
 +	const struct axienet_config *axienet_config;
@@ -1783,7 +1784,7 @@ index cbdca0fb8..88196ff69 100644
  };
  
  /**
-@@ -634,6 +1271,17 @@ struct axienet_option {
+@@ -637,6 +1274,17 @@ struct axienet_option {
  	u32 m_or;
  };
  
@@ -1801,7 +1802,7 @@ index cbdca0fb8..88196ff69 100644
  /**
   * axienet_ior - Memory mapped Axi Ethernet register read
   * @lp:         Pointer to axienet local structure
-@@ -681,58 +1329,228 @@ static inline void axienet_iow(struct axienet_local *lp, off_t offset,
+@@ -684,58 +1332,228 @@ static inline void axienet_iow(struct axienet_local *lp, off_t offset,
  }
  
  /**
@@ -3218,7 +3219,7 @@ index 000000000..fcc6bf43c
 +
 +#endif /* XILINX_AXIENET_EOE_H */
 diff --git a/drivers/net/ethernet/xilinx/xilinx_axienet_main.c b/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
-index 3339c5e1a..32d0e9f7e 100644
+index 76970a806..8014aa79e 100644
 --- a/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
 +++ b/drivers/net/ethernet/xilinx/xilinx_axienet_main.c
 @@ -28,6 +28,7 @@
@@ -4633,7 +4634,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return 0;
  }
  
-@@ -954,26 +1610,30 @@ axienet_start_xmit_dmaengine(struct sk_buff *skb, struct net_device *ndev)
+@@ -955,26 +1611,30 @@ axienet_start_xmit_dmaengine(struct sk_buff *skb, struct net_device *ndev)
   * buffer. It finally invokes "netif_wake_queue" to restart transmission if
   * required.
   */
@@ -4669,7 +4670,7 @@ index 3339c5e1a..32d0e9f7e 100644
  			netif_wake_queue(ndev);
  	}
  
-@@ -982,55 +1642,312 @@ static int axienet_tx_poll(struct napi_struct *napi, int budget)
+@@ -983,55 +1643,312 @@ static int axienet_tx_poll(struct napi_struct *napi, int budget)
  		 * cause an immediate interrupt if any TX packets are
  		 * already pending.
  		 */
@@ -5010,7 +5011,7 @@ index 3339c5e1a..32d0e9f7e 100644
  		if (lp->features & XAE_FEATURE_FULL_TX_CSUM) {
  			/* Tx Full Checksum Offload Enabled */
  			cur_p->app0 |= 2;
-@@ -1041,68 +1958,140 @@ axienet_start_xmit(struct sk_buff *skb, struct net_device *ndev)
+@@ -1042,68 +1959,140 @@ axienet_start_xmit(struct sk_buff *skb, struct net_device *ndev)
  			cur_p->app0 |= 1;
  			cur_p->app1 = (csum_start_off << 16) | csum_index_off;
  		}
@@ -5197,7 +5198,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  /**
-@@ -1156,33 +2145,64 @@ static void axienet_dma_rx_cb(void *data, const struct dmaengine_result *result)
+@@ -1165,33 +2154,64 @@ static void axienet_dma_rx_cb(void *data, const struct dmaengine_result *result)
  }
  
  /**
@@ -5278,7 +5279,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  		/* skb could be NULL if a previous pass already received the
  		 * packet for this slot in the ring, but failed to refill it
-@@ -1190,171 +2210,207 @@ static int axienet_rx_poll(struct napi_struct *napi, int budget)
+@@ -1199,171 +2219,207 @@ static int axienet_rx_poll(struct napi_struct *napi, int budget)
  		 * receive it again.
  		 */
  		if (likely(skb)) {
@@ -5599,7 +5600,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  /**
-@@ -1386,7 +2442,55 @@ static irqreturn_t axienet_eth_irq(int irq, void *_ndev)
+@@ -1395,7 +2451,55 @@ static irqreturn_t axienet_eth_irq(int irq, void *_ndev)
  	return IRQ_HANDLED;
  }
  
@@ -5656,7 +5657,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  /**
   * axienet_rx_submit_desc - Submit the rx descriptors to dmaengine.
-@@ -1469,7 +2573,7 @@ static int axienet_init_dmaengine(struct net_device *ndev)
+@@ -1478,7 +2582,7 @@ static int axienet_init_dmaengine(struct net_device *ndev)
  		ret = PTR_ERR(lp->rx_chan);
  		dev_err(lp->dev, "No Ethernet DMA (RX) channel found\n");
  		goto err_dma_release_tx;
@@ -5665,7 +5666,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	lp->tx_ring_tail = 0;
  	lp->tx_ring_head = 0;
-@@ -1539,28 +2643,68 @@ static int axienet_init_dmaengine(struct net_device *ndev)
+@@ -1549,28 +2653,68 @@ static int axienet_init_dmaengine(struct net_device *ndev)
   */
  static int axienet_init_legacy_dma(struct net_device *ndev)
  {
@@ -5750,7 +5751,7 @@ index 3339c5e1a..32d0e9f7e 100644
  		ret = request_irq(lp->eth_irq, axienet_eth_irq, IRQF_SHARED,
  				  ndev->name, ndev);
  		if (ret)
-@@ -1570,17 +2714,52 @@ static int axienet_init_legacy_dma(struct net_device *ndev)
+@@ -1580,17 +2724,52 @@ static int axienet_init_legacy_dma(struct net_device *ndev)
  	return 0;
  
  err_eth_irq:
@@ -5808,7 +5809,7 @@ index 3339c5e1a..32d0e9f7e 100644
  /**
   * axienet_open - Driver open routine.
   * @ndev:	Pointer to net_device structure
-@@ -1596,7 +2775,8 @@ static int axienet_init_legacy_dma(struct net_device *ndev)
+@@ -1606,7 +2785,8 @@ static int axienet_init_legacy_dma(struct net_device *ndev)
   */
  static int axienet_open(struct net_device *ndev)
  {
@@ -5818,7 +5819,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	struct axienet_local *lp = netdev_priv(ndev);
  
  	/* When we do an Axi Ethernet reset, it resets the complete core
-@@ -1607,16 +2787,144 @@ static int axienet_open(struct net_device *ndev)
+@@ -1617,16 +2797,144 @@ static int axienet_open(struct net_device *ndev)
  	ret = axienet_device_reset(ndev);
  	axienet_unlock_mii(lp);
  
@@ -5969,7 +5970,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	if (lp->use_dmaengine) {
  		/* Enable interrupts for Axi Ethernet core (if defined) */
-@@ -1636,6 +2944,10 @@ static int axienet_open(struct net_device *ndev)
+@@ -1646,6 +2954,10 @@ static int axienet_open(struct net_device *ndev)
  			goto err_phy;
  	}
  
@@ -5980,7 +5981,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return 0;
  
  err_free_eth_irq:
-@@ -1643,8 +2955,10 @@ static int axienet_open(struct net_device *ndev)
+@@ -1653,8 +2965,10 @@ static int axienet_open(struct net_device *ndev)
  		free_irq(lp->eth_irq, ndev);
  err_phy:
  	cancel_delayed_work_sync(&lp->stats_work);
@@ -5993,7 +5994,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return ret;
  }
  
-@@ -1663,27 +2977,31 @@ static int axienet_stop(struct net_device *ndev)
+@@ -1673,27 +2987,31 @@ static int axienet_stop(struct net_device *ndev)
  	struct axienet_local *lp = netdev_priv(ndev);
  	int i;
  
@@ -6038,10 +6039,10 @@ index 3339c5e1a..32d0e9f7e 100644
 +
  		axienet_dma_bd_release(ndev);
  	} else {
- 		dmaengine_terminate_sync(lp->tx_chan);
-@@ -1701,11 +3019,24 @@ static int axienet_stop(struct net_device *ndev)
- 		dma_release_channel(lp->rx_chan);
- 		dma_release_channel(lp->tx_chan);
+ 		struct skbuf_dma_descriptor *skbuf_dma;
+@@ -1733,11 +3051,24 @@ static int axienet_stop(struct net_device *ndev)
+ 		}
+ 		kfree(lp->rx_skb_ring);
  	}
 +	if (lp->axienet_config->mactype == XAXIENET_1_2p5G)
 +		axienet_iow(lp, XAE_IE_OFFSET, 0);
@@ -6067,7 +6068,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return 0;
  }
  
-@@ -1736,6 +3067,18 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
+@@ -1768,6 +3099,18 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
  	return 0;
  }
  
@@ -6086,7 +6087,7 @@ index 3339c5e1a..32d0e9f7e 100644
  #ifdef CONFIG_NET_POLL_CONTROLLER
  /**
   * axienet_poll_controller - Axi Ethernet poll mechanism.
-@@ -1747,16 +3090,158 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
+@@ -1779,16 +3122,158 @@ static int axienet_change_mtu(struct net_device *ndev, int new_mtu)
  static void axienet_poll_controller(struct net_device *ndev)
  {
  	struct axienet_local *lp = netdev_priv(ndev);
@@ -6251,7 +6252,7 @@ index 3339c5e1a..32d0e9f7e 100644
  static int axienet_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
  {
  	struct axienet_local *lp = netdev_priv(dev);
-@@ -1764,7 +3249,22 @@ static int axienet_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
+@@ -1796,7 +3281,22 @@ static int axienet_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
  	if (!netif_running(dev))
  		return -EINVAL;
  
@@ -6275,7 +6276,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  static void
-@@ -1775,6 +3275,14 @@ axienet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+@@ -1807,6 +3307,14 @@ axienet_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
  
  	netdev_stats_to_stats64(stats, &dev->stats);
  
@@ -6290,7 +6291,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	do {
  		start = u64_stats_fetch_begin(&lp->rx_stat_sync);
  		stats->rx_packets = u64_stats_read(&lp->rx_packets);
-@@ -1827,9 +3335,11 @@ static const struct net_device_ops axienet_netdev_ops = {
+@@ -1859,9 +3367,11 @@ static const struct net_device_ops axienet_netdev_ops = {
  	.ndo_validate_addr = eth_validate_addr,
  	.ndo_eth_ioctl = axienet_ioctl,
  	.ndo_set_rx_mode = axienet_set_multicast_list,
@@ -6302,7 +6303,7 @@ index 3339c5e1a..32d0e9f7e 100644
  };
  
  static const struct net_device_ops axienet_netdev_dmaengine_ops = {
-@@ -1924,14 +3434,15 @@ static void axienet_ethtools_get_regs(struct net_device *ndev,
+@@ -1956,14 +3466,15 @@ static void axienet_ethtools_get_regs(struct net_device *ndev,
  	data[30] = axienet_ior(lp, XAE_AF0_OFFSET);
  	data[31] = axienet_ior(lp, XAE_AF1_OFFSET);
  	if (!lp->use_dmaengine) {
@@ -6326,7 +6327,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	}
  }
  
-@@ -1991,14 +3502,15 @@ axienet_ethtools_get_pauseparam(struct net_device *ndev,
+@@ -2023,14 +3534,15 @@ axienet_ethtools_get_pauseparam(struct net_device *ndev,
  {
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -6344,7 +6345,7 @@ index 3339c5e1a..32d0e9f7e 100644
   *
   * This implements ethtool command for enabling flow control on Rx and Tx
   * paths. Issue "ethtool -A ethX tx on|off" under linux prompt to execute this
-@@ -2012,6 +3524,9 @@ axienet_ethtools_set_pauseparam(struct net_device *ndev,
+@@ -2044,6 +3556,9 @@ axienet_ethtools_set_pauseparam(struct net_device *ndev,
  {
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -6354,7 +6355,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return phylink_ethtool_set_pauseparam(lp->phylink, epauseparm);
  }
  
-@@ -2034,12 +3549,28 @@ axienet_ethtools_get_coalesce(struct net_device *ndev,
+@@ -2066,12 +3581,28 @@ axienet_ethtools_get_coalesce(struct net_device *ndev,
  			      struct kernel_ethtool_coalesce *kernel_coal,
  			      struct netlink_ext_ack *extack)
  {
@@ -6387,7 +6388,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return 0;
  }
  
-@@ -2094,6 +3625,9 @@ axienet_ethtools_get_link_ksettings(struct net_device *ndev,
+@@ -2126,6 +3657,9 @@ axienet_ethtools_get_link_ksettings(struct net_device *ndev,
  {
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -6397,7 +6398,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return phylink_ethtool_ksettings_get(lp->phylink, cmd);
  }
  
-@@ -2103,6 +3637,9 @@ axienet_ethtools_set_link_ksettings(struct net_device *ndev,
+@@ -2135,6 +3669,9 @@ axienet_ethtools_set_link_ksettings(struct net_device *ndev,
  {
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -6407,7 +6408,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	return phylink_ethtool_ksettings_set(lp->phylink, cmd);
  }
  
-@@ -2118,7 +3655,21 @@ static void axienet_ethtools_get_ethtool_stats(struct net_device *dev,
+@@ -2150,7 +3687,21 @@ static void axienet_ethtools_get_ethtool_stats(struct net_device *dev,
  					       u64 *data)
  {
  	struct axienet_local *lp = netdev_priv(dev);
@@ -6430,7 +6431,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	do {
  		start = read_seqcount_begin(&lp->hw_stats_seqcount);
-@@ -2148,10 +3699,24 @@ static const char axienet_ethtool_stats_strings[][ETH_GSTRING_LEN] = {
+@@ -2180,10 +3731,24 @@ static const char axienet_ethtool_stats_strings[][ETH_GSTRING_LEN] = {
  
  static void axienet_ethtools_get_strings(struct net_device *dev, u32 stringset, u8 *data)
  {
@@ -6457,7 +6458,7 @@ index 3339c5e1a..32d0e9f7e 100644
  		break;
  	}
  }
-@@ -2164,6 +3729,11 @@ static int axienet_ethtools_get_sset_count(struct net_device *dev, int sset)
+@@ -2196,6 +3761,11 @@ static int axienet_ethtools_get_sset_count(struct net_device *dev, int sset)
  	case ETH_SS_STATS:
  		if (lp->features & XAE_FEATURE_STATS)
  			return ARRAY_SIZE(axienet_ethtool_stats_strings);
@@ -6469,7 +6470,7 @@ index 3339c5e1a..32d0e9f7e 100644
  		fallthrough;
  	default:
  		return -EOPNOTSUPP;
-@@ -2320,21 +3890,132 @@ axienet_ethtool_get_rmon_stats(struct net_device *dev,
+@@ -2352,21 +3922,132 @@ axienet_ethtool_get_rmon_stats(struct net_device *dev,
  	*ranges = axienet_rmon_ranges;
  }
  
@@ -6617,7 +6618,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	.nway_reset	= axienet_ethtools_nway_reset,
  	.get_ethtool_stats = axienet_ethtools_get_ethtool_stats,
  	.get_strings    = axienet_ethtools_get_strings,
-@@ -2343,26 +4024,256 @@ static const struct ethtool_ops axienet_ethtool_ops = {
+@@ -2375,26 +4056,256 @@ static const struct ethtool_ops axienet_ethtool_ops = {
  	.get_eth_mac_stats = axienet_ethtool_get_eth_mac_stats,
  	.get_eth_ctrl_stats = axienet_ethtool_get_eth_ctrl_stats,
  	.get_rmon_stats = axienet_ethtool_get_rmon_stats,
@@ -6878,7 +6879,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
-@@ -2370,9 +4281,9 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -2402,9 +4313,9 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  			      const unsigned long *advertising,
  			      bool permit_pause_to_mac)
  {
@@ -6891,7 +6892,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	int ret;
  
  	if (lp->switch_x_sgmii) {
-@@ -2386,6 +4297,68 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -2418,6 +4329,68 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  			return ret;
  		}
  	}
@@ -6960,7 +6961,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	ret = phylink_mii_c22_pcs_config(pcs_phy, interface, advertising,
  					 neg_mode);
-@@ -2395,10 +4368,27 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
+@@ -2427,10 +4400,27 @@ static int axienet_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
  	return ret;
  }
  
@@ -6988,7 +6989,7 @@ index 3339c5e1a..32d0e9f7e 100644
  };
  
  static struct phylink_pcs *axienet_mac_select_pcs(struct phylink_config *config,
-@@ -2407,11 +4397,7 @@ static struct phylink_pcs *axienet_mac_select_pcs(struct phylink_config *config,
+@@ -2439,11 +4429,7 @@ static struct phylink_pcs *axienet_mac_select_pcs(struct phylink_config *config,
  	struct net_device *ndev = to_net_dev(config->dev);
  	struct axienet_local *lp = netdev_priv(ndev);
  
@@ -7001,7 +7002,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  static void axienet_mac_config(struct phylink_config *config, unsigned int mode,
-@@ -2437,10 +4423,20 @@ static void axienet_mac_link_up(struct phylink_config *config,
+@@ -2469,10 +4455,20 @@ static void axienet_mac_link_up(struct phylink_config *config,
  	struct axienet_local *lp = netdev_priv(ndev);
  	u32 emmc_reg, fcc_reg;
  
@@ -7022,7 +7023,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	case SPEED_1000:
  		emmc_reg |= XAE_EMMC_LINKSPD_1000;
  		break;
-@@ -2477,95 +4473,368 @@ static const struct phylink_mac_ops axienet_phylink_ops = {
+@@ -2509,95 +4505,368 @@ static const struct phylink_mac_ops axienet_phylink_ops = {
  	.mac_link_up = axienet_mac_link_up,
  };
  
@@ -7463,7 +7464,7 @@ index 3339c5e1a..32d0e9f7e 100644
  }
  
  /**
-@@ -2582,16 +4851,32 @@ static void axienet_dma_err_handler(struct work_struct *work)
+@@ -2614,16 +4883,32 @@ static void axienet_dma_err_handler(struct work_struct *work)
   */
  static int axienet_probe(struct platform_device *pdev)
  {
@@ -7499,7 +7500,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	if (!ndev)
  		return -ENOMEM;
  
-@@ -2609,6 +4894,8 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2641,6 +4926,8 @@ static int axienet_probe(struct platform_device *pdev)
  	lp->ndev = ndev;
  	lp->dev = &pdev->dev;
  	lp->options = XAE_OPTION_DEFAULTS;
@@ -7508,7 +7509,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	lp->rx_bd_num = RX_BD_NUM_DEFAULT;
  	lp->tx_bd_num = TX_BD_NUM_DEFAULT;
  
-@@ -2618,6 +4905,7 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2651,6 +4938,7 @@ static int axienet_probe(struct platform_device *pdev)
  	mutex_init(&lp->stats_lock);
  	seqcount_mutex_init(&lp->hw_stats_seqcount, &lp->stats_lock);
  	INIT_DEFERRABLE_WORK(&lp->stats_work, axienet_refresh_stats);
@@ -7516,7 +7517,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	lp->axi_clk = devm_clk_get_optional(&pdev->dev, "s_axi_lite_clk");
  	if (!lp->axi_clk) {
-@@ -2656,11 +4944,24 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2689,11 +4977,24 @@ static int axienet_probe(struct platform_device *pdev)
  	}
  	lp->regs_start = ethres->start;
  
@@ -7544,7 +7545,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	ret = of_property_read_u32(pdev->dev.of_node, "xlnx,txcsum", &value);
  	if (!ret) {
-@@ -2702,83 +5003,284 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2735,83 +5036,284 @@ static int axienet_probe(struct platform_device *pdev)
  						   "xlnx,switch-x-sgmii");
  
  	/* Start with the proprietary, and broken phy_type */
@@ -7888,7 +7889,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  		/* Autodetect the need for 64-bit DMA pointers.
  		 * When the IP is configured for a bus width bigger than 32 bits,
-@@ -2788,34 +5290,99 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2821,34 +5323,99 @@ static int axienet_probe(struct platform_device *pdev)
  		 * only, those registers are RES0.
  		 * Those MSB registers were introduced in IP v7.1, which we check first.
  		 */
@@ -8009,7 +8010,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	} else {
  		struct xilinx_vdma_config cfg;
  		struct dma_chan *tx_chan;
-@@ -2849,6 +5416,8 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2882,6 +5449,8 @@ static int axienet_probe(struct platform_device *pdev)
  		ndev->netdev_ops = &axienet_netdev_dmaengine_ops;
  	else
  		ndev->netdev_ops = &axienet_netdev_ops;
@@ -8018,7 +8019,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	/* Check for Ethernet core IRQ (optional) */
  	if (lp->eth_irq <= 0)
  		dev_info(&pdev->dev, "Ethernet core IRQ not defined\n");
-@@ -2862,32 +5431,53 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2895,32 +5464,53 @@ static int axienet_probe(struct platform_device *pdev)
  			 ret);
  		axienet_set_mac_address(ndev, NULL);
  	}
@@ -8088,7 +8089,7 @@ index 3339c5e1a..32d0e9f7e 100644
  		lp->pcs_phy = of_mdio_find_device(np);
  		if (!lp->pcs_phy) {
  			ret = -EPROBE_DEFER;
-@@ -2895,28 +5485,109 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2928,28 +5518,109 @@ static int axienet_probe(struct platform_device *pdev)
  			goto cleanup_mdio;
  		}
  		of_node_put(np);
@@ -8213,7 +8214,7 @@ index 3339c5e1a..32d0e9f7e 100644
  	if (IS_ERR(lp->phylink)) {
  		ret = PTR_ERR(lp->phylink);
  		dev_err(&pdev->dev, "phylink_create error (%i)\n", ret);
-@@ -2929,8 +5600,25 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2962,8 +5633,25 @@ static int axienet_probe(struct platform_device *pdev)
  		goto cleanup_phylink;
  	}
  
@@ -8239,7 +8240,7 @@ index 3339c5e1a..32d0e9f7e 100644
  cleanup_phylink:
  	phylink_destroy(lp->phylink);
  
-@@ -2939,6 +5627,9 @@ static int axienet_probe(struct platform_device *pdev)
+@@ -2972,6 +5660,9 @@ static int axienet_probe(struct platform_device *pdev)
  		put_device(&lp->pcs_phy->dev);
  	if (lp->mii_bus)
  		axienet_mdio_teardown(lp);
@@ -8249,7 +8250,7 @@ index 3339c5e1a..32d0e9f7e 100644
  cleanup_clk:
  	clk_bulk_disable_unprepare(XAE_NUM_MISC_CLOCKS, lp->misc_clks);
  	clk_disable_unprepare(lp->axi_clk);
-@@ -2953,8 +5644,18 @@ static void axienet_remove(struct platform_device *pdev)
+@@ -2986,8 +5677,18 @@ static void axienet_remove(struct platform_device *pdev)
  {
  	struct net_device *ndev = platform_get_drvdata(pdev);
  	struct axienet_local *lp = netdev_priv(ndev);
@@ -8268,7 +8269,7 @@ index 3339c5e1a..32d0e9f7e 100644
  
  	if (lp->phylink)
  		phylink_destroy(lp->phylink);
-@@ -2962,10 +5663,14 @@ static void axienet_remove(struct platform_device *pdev)
+@@ -2995,10 +5696,14 @@ static void axienet_remove(struct platform_device *pdev)
  	if (lp->pcs_phy)
  		put_device(&lp->pcs_phy->dev);
  
