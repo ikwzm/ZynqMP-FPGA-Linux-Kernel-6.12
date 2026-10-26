@@ -207,7 +207,7 @@ diff --git a/drivers/uio/uio.c b/drivers/uio/uio_core.c
 similarity index 96%
 rename from drivers/uio/uio.c
 rename to drivers/uio/uio_core.c
-index 004a549c6..f78a74ebd 100644
+index bce9635c7..0f5055283 100644
 --- a/drivers/uio/uio.c
 +++ b/drivers/uio/uio_core.c
 @@ -25,6 +25,12 @@

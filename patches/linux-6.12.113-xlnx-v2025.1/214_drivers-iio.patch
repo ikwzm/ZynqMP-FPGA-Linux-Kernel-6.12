@@ -164,7 +164,7 @@ index 000000000..3aa753c6a
 +        };
 +    };
 diff --git a/drivers/iio/adc/Kconfig b/drivers/iio/adc/Kconfig
-index 57fc8f0de..2e0282682 100644
+index 7484dd98f..4cfa66912 100644
 --- a/drivers/iio/adc/Kconfig
 +++ b/drivers/iio/adc/Kconfig
 @@ -618,6 +618,18 @@ config INA2XX_ADC
@@ -186,7 +186,7 @@ index 57fc8f0de..2e0282682 100644
  config INGENIC_ADC
  	tristate "Ingenic JZ47xx SoCs ADC driver"
  	depends on MIPS || COMPILE_TEST
-@@ -1649,4 +1661,34 @@ config XILINX_AMS
+@@ -1650,4 +1662,34 @@ config XILINX_AMS
  	  The driver can also be built as a module. If so, the module will be called
  	  xilinx-ams.
  
@@ -3370,7 +3370,7 @@ index 7d6820c6e..870112577 100644
  	}
  
 diff --git a/drivers/iio/adc/xilinx-xadc-core.c b/drivers/iio/adc/xilinx-xadc-core.c
-index a17e25d31..639b751c5 100644
+index 0ce97fb4e..8ca164641 100644
 --- a/drivers/iio/adc/xilinx-xadc-core.c
 +++ b/drivers/iio/adc/xilinx-xadc-core.c
 @@ -391,8 +391,7 @@ static int xadc_zynq_setup(struct platform_device *pdev,

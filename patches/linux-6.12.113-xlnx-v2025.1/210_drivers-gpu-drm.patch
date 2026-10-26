@@ -1894,7 +1894,7 @@ index 519228eb1..dda7ac573 100644
  EXPORT_SYMBOL(__drm_atomic_helper_connector_destroy_state);
  
 diff --git a/drivers/gpu/drm/drm_atomic_uapi.c b/drivers/gpu/drm/drm_atomic_uapi.c
-index fd36b8fd5..57e4626aa 100644
+index 02255296c..1809c9db4 100644
 --- a/drivers/gpu/drm/drm_atomic_uapi.c
 +++ b/drivers/gpu/drm/drm_atomic_uapi.c
 @@ -742,6 +742,13 @@ static int drm_atomic_connector_set_property(struct drm_connector *connector,
@@ -2164,10 +2164,10 @@ index d6550b54f..ac82b0e1f 100644
  		return ERR_PTR(-EINVAL);
  	}
 diff --git a/drivers/gpu/drm/panel/panel-simple.c b/drivers/gpu/drm/panel/panel-simple.c
-index a0e2da295..c75da42d6 100644
+index e54b8f164..a5ab7638c 100644
 --- a/drivers/gpu/drm/panel/panel-simple.c
 +++ b/drivers/gpu/drm/panel/panel-simple.c
-@@ -5163,6 +5163,33 @@ static const struct panel_desc_dsi auo_b080uan01 = {
+@@ -5191,6 +5191,33 @@ static const struct panel_desc_dsi auo_b080uan01 = {
  	.lanes = 4,
  };
  
@@ -2201,7 +2201,7 @@ index a0e2da295..c75da42d6 100644
  static const struct drm_display_mode boe_tv080wum_nl0_mode = {
  	.clock = 160000,
  	.hdisplay = 1200,
-@@ -5341,6 +5368,9 @@ static const struct of_device_id dsi_of_match[] = {
+@@ -5369,6 +5396,9 @@ static const struct of_device_id dsi_of_match[] = {
  	{
  		.compatible = "auo,b080uan01",
  		.data = &auo_b080uan01

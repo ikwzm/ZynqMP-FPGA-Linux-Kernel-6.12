@@ -20,10 +20,10 @@ index 000000000..aeb991749
 +		xlnx,phy-type = <0x5>;
 +	};
 diff --git a/drivers/net/phy/Kconfig b/drivers/net/phy/Kconfig
-index 01b235b3b..72e790d67 100644
+index 4e78a4d8f..4cd9e3a57 100644
 --- a/drivers/net/phy/Kconfig
 +++ b/drivers/net/phy/Kconfig
-@@ -441,6 +441,14 @@ config VITESSE_PHY
+@@ -426,6 +426,14 @@ config VITESSE_PHY
  	help
  	  Currently supports the vsc8244
  
@@ -39,10 +39,10 @@ index 01b235b3b..72e790d67 100644
  	tristate "Xilinx GMII2RGMII converter driver"
  	help
 diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile
-index 90f886844..f7cccf910 100644
+index e6145153e..c52c9ea10 100644
 --- a/drivers/net/phy/Makefile
 +++ b/drivers/net/phy/Makefile
-@@ -102,4 +102,5 @@ obj-$(CONFIG_SMSC_PHY)		+= smsc.o
+@@ -101,4 +101,5 @@ obj-$(CONFIG_SMSC_PHY)		+= smsc.o
  obj-$(CONFIG_STE10XP)		+= ste10Xp.o
  obj-$(CONFIG_TERANETICS_PHY)	+= teranetics.o
  obj-$(CONFIG_VITESSE_PHY)	+= vitesse.o
@@ -293,7 +293,7 @@ index 000000000..aec23976c
 +MODULE_DESCRIPTION("Xilinx PCS/PMA PHY driver");
 +MODULE_LICENSE("GPL");
 diff --git a/include/linux/phy.h b/include/linux/phy.h
-index 49283facf..816ffc373 100644
+index 957fb0cdb..aa56aef55 100644
 --- a/include/linux/phy.h
 +++ b/include/linux/phy.h
 @@ -124,6 +124,9 @@ extern const int phy_10gbit_features_array[1];

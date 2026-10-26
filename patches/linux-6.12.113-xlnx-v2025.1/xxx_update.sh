@@ -1,5 +1,5 @@
 PATCH_DIR=$(cd $(dirname $0); pwd)
-BASE_PATCH_DIR="$PATCH_DIR/../linux-6.12.100-xlnx-v2025.1"
+BASE_PATCH_DIR="$PATCH_DIR/../linux-6.12.109-xlnx-v2025.1"
 dry_run=0
 verbose=1
 update=1

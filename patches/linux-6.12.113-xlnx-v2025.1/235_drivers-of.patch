@@ -368,10 +368,10 @@ index 000000000..3c21eec56
 +}
 +late_initcall(of_cfs_init);
 diff --git a/drivers/of/overlay.c b/drivers/of/overlay.c
-index cbdecccca..5335b4803 100644
+index adc6a0277..4c0b9008c 100644
 --- a/drivers/of/overlay.c
 +++ b/drivers/of/overlay.c
-@@ -1069,6 +1069,7 @@ int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,
+@@ -1093,6 +1093,7 @@ int of_overlay_fdt_apply(const void *overlay_fdt, u32 overlay_fdt_size,
  }
  EXPORT_SYMBOL_GPL(of_overlay_fdt_apply);
  
@@ -379,7 +379,7 @@ index cbdecccca..5335b4803 100644
  /*
   * Find @np in @tree.
   *
-@@ -1145,6 +1146,7 @@ static int overlay_removal_is_ok(struct overlay_changeset *remove_ovcs)
+@@ -1169,6 +1170,7 @@ static int overlay_removal_is_ok(struct overlay_changeset *remove_ovcs)
  
  	return 1;
  }
@@ -387,7 +387,7 @@ index cbdecccca..5335b4803 100644
  
  /**
   * of_overlay_remove() - Revert and free an overlay changeset
-@@ -1200,10 +1202,12 @@ int of_overlay_remove(int *ovcs_id)
+@@ -1224,10 +1226,12 @@ int of_overlay_remove(int *ovcs_id)
  		goto err_unlock;
  	}
  

@@ -42,7 +42,7 @@ index fd04a6e5d..8dc7d90c0 100644
  	default:
  		dev_err(rsmu->dev, "Unsupported RSMU device type: %d\n", rsmu->type);
 diff --git a/drivers/mfd/rsmu_i2c.c b/drivers/mfd/rsmu_i2c.c
-index 9e5fc8259..419504694 100644
+index c57795ed2..75b910e2f 100644
 --- a/drivers/mfd/rsmu_i2c.c
 +++ b/drivers/mfd/rsmu_i2c.c
 @@ -258,11 +258,11 @@ static const struct regmap_config rsmu_sabre_regmap_config = {
@@ -70,8 +70,8 @@ index 9e5fc8259..419504694 100644
  		break;
  	default:
  		dev_err(rsmu->dev, "Unsupported RSMU device type: %d\n", rsmu->type);
-@@ -332,8 +332,8 @@ static const struct i2c_device_id rsmu_i2c_id[] = {
- 	{ "8a34001",  RSMU_CM },
+@@ -333,8 +333,8 @@ static const struct i2c_device_id rsmu_i2c_id[] = {
+ 	{ "8a34002",  RSMU_CM },
  	{ "82p33810", RSMU_SABRE },
  	{ "82p33811", RSMU_SABRE },
 -	{ "8v19n850", RSMU_SL },
@@ -81,8 +81,8 @@ index 9e5fc8259..419504694 100644
  	{}
  };
  MODULE_DEVICE_TABLE(i2c, rsmu_i2c_id);
-@@ -343,8 +343,8 @@ static const struct of_device_id rsmu_i2c_of_match[] = {
- 	{ .compatible = "idt,8a34001",  .data = (void *)RSMU_CM },
+@@ -345,8 +345,8 @@ static const struct of_device_id rsmu_i2c_of_match[] = {
+ 	{ .compatible = "idt,8a34002",  .data = (void *)RSMU_CM },
  	{ .compatible = "idt,82p33810", .data = (void *)RSMU_SABRE },
  	{ .compatible = "idt,82p33811", .data = (void *)RSMU_SABRE },
 -	{ .compatible = "idt,8v19n850", .data = (void *)RSMU_SL },

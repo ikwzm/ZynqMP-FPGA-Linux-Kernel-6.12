@@ -619,7 +619,7 @@ index 61cb47cf7..55ef530e4 100644
  obj-$(CONFIG_SND_SOC_XILINX_SPDIF) += snd-soc-xlnx-spdif.o
 +obj-$(CONFIG_SND_SOC_XILINX_PL_SND_CARD) += xlnx_pl_snd_card.o
 diff --git a/sound/soc/xilinx/xlnx_formatter_pcm.c b/sound/soc/xilinx/xlnx_formatter_pcm.c
-index 45b178148..3848443bd 100644
+index 4d90e96a6..658f12bc8 100644
 --- a/sound/soc/xilinx/xlnx_formatter_pcm.c
 +++ b/sound/soc/xilinx/xlnx_formatter_pcm.c
 @@ -1,22 +1,26 @@
@@ -786,8 +786,8 @@ index 45b178148..3848443bd 100644
 +	iowrite32(val, stream_data->mmio + XLNX_AUD_CTRL);
  
  	return 0;
- }
-@@ -421,6 +439,9 @@ static int xlnx_formatter_pcm_close(struct snd_soc_component *component,
+ 
+@@ -429,6 +447,9 @@ static int xlnx_formatter_pcm_close(struct snd_soc_component *component,
  	struct xlnx_pcm_stream_param *stream_data =
  			substream->runtime->private_data;
  
@@ -797,7 +797,7 @@ index 45b178148..3848443bd 100644
  	ret = xlnx_formatter_pcm_reset(stream_data->mmio);
  	if (ret) {
  		dev_err(component->dev, "audio formatter reset failed\n");
-@@ -441,7 +462,7 @@ xlnx_formatter_pcm_pointer(struct snd_soc_component *component,
+@@ -449,7 +470,7 @@ xlnx_formatter_pcm_pointer(struct snd_soc_component *component,
  	struct snd_pcm_runtime *runtime = substream->runtime;
  	struct xlnx_pcm_stream_param *stream_data = runtime->private_data;
  
@@ -806,7 +806,7 @@ index 45b178148..3848443bd 100644
  
  	if (pos >= stream_data->buffer_size)
  		pos = 0;
-@@ -453,12 +474,20 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
+@@ -461,12 +482,20 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
  					struct snd_pcm_substream *substream,
  					struct snd_pcm_hw_params *params)
  {
@@ -829,7 +829,7 @@ index 45b178148..3848443bd 100644
  
  	active_ch = params_channels(params);
  	if (active_ch > stream_data->ch_limit)
-@@ -478,13 +507,20 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
+@@ -486,13 +515,20 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
  	}
  
  	if (substream->stream == SNDRV_PCM_STREAM_CAPTURE &&
@@ -856,7 +856,7 @@ index 45b178148..3848443bd 100644
  
  			xlnx_parse_aes_params(aes_reg1_val, aes_reg2_val,
  					      component->dev);
-@@ -492,15 +528,19 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
+@@ -500,15 +536,19 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
  	}
  
  	size = params_buffer_bytes(params);
@@ -879,7 +879,7 @@ index 45b178148..3848443bd 100644
  	bits_per_sample = params_width(params);
  	switch (bits_per_sample) {
  	case 8:
-@@ -518,25 +558,35 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
+@@ -526,25 +566,35 @@ static int xlnx_formatter_pcm_hw_params(struct snd_soc_component *component,
  	case 32:
  		val |= (BIT_DEPTH_32 << AUD_CTRL_DATA_WIDTH_SHIFT);
  		break;
@@ -922,7 +922,7 @@ index 45b178148..3848443bd 100644
  {
  	u32 val;
  	struct xlnx_pcm_stream_param *stream_data =
-@@ -546,16 +596,16 @@ static int xlnx_formatter_pcm_trigger(struct snd_soc_component *component,
+@@ -554,16 +604,16 @@ static int xlnx_formatter_pcm_trigger(struct snd_soc_component *component,
  	case SNDRV_PCM_TRIGGER_START:
  	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
  	case SNDRV_PCM_TRIGGER_RESUME:
@@ -943,7 +943,7 @@ index 45b178148..3848443bd 100644
  		break;
  	}
  
-@@ -565,28 +615,139 @@ static int xlnx_formatter_pcm_trigger(struct snd_soc_component *component,
+@@ -573,28 +623,139 @@ static int xlnx_formatter_pcm_trigger(struct snd_soc_component *component,
  static int xlnx_formatter_pcm_new(struct snd_soc_component *component,
  				  struct snd_soc_pcm_runtime *rtd)
  {
@@ -1095,7 +1095,7 @@ index 45b178148..3848443bd 100644
  	struct xlnx_pcm_drv_data *aud_drv_data;
  	struct device *dev = &pdev->dev;
  
-@@ -594,79 +755,36 @@ static int xlnx_formatter_pcm_probe(struct platform_device *pdev)
+@@ -602,79 +763,36 @@ static int xlnx_formatter_pcm_probe(struct platform_device *pdev)
  	if (!aud_drv_data)
  		return -ENOMEM;
  
@@ -1191,7 +1191,7 @@ index 45b178148..3848443bd 100644
  	}
  
  	dev_set_drvdata(dev, aud_drv_data);
-@@ -675,14 +793,23 @@ static int xlnx_formatter_pcm_probe(struct platform_device *pdev)
+@@ -683,14 +801,23 @@ static int xlnx_formatter_pcm_probe(struct platform_device *pdev)
  					      NULL, 0);
  	if (ret) {
  		dev_err(dev, "pcm platform device register failed\n");
@@ -1220,7 +1220,7 @@ index 45b178148..3848443bd 100644
  }
  
  static void xlnx_formatter_pcm_remove(struct platform_device *pdev)
-@@ -690,6 +817,8 @@ static void xlnx_formatter_pcm_remove(struct platform_device *pdev)
+@@ -698,6 +825,8 @@ static void xlnx_formatter_pcm_remove(struct platform_device *pdev)
  	int ret = 0;
  	struct xlnx_pcm_drv_data *adata = dev_get_drvdata(&pdev->dev);
  
@@ -1229,7 +1229,7 @@ index 45b178148..3848443bd 100644
  	if (adata->s2mm_presence)
  		ret = xlnx_formatter_pcm_reset(adata->mmio + XLNX_S2MM_OFFSET);
  
-@@ -699,8 +828,6 @@ static void xlnx_formatter_pcm_remove(struct platform_device *pdev)
+@@ -707,8 +836,6 @@ static void xlnx_formatter_pcm_remove(struct platform_device *pdev)
  
  	if (ret)
  		dev_err(&pdev->dev, "audio formatter reset failed\n");

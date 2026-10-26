@@ -550,7 +550,7 @@ index 92d8ade98..e16384aff 100644
          phy-handle = <&phy0>;
          xlnx,rx-ping-pong;
 diff --git a/drivers/net/ethernet/cadence/macb.h b/drivers/net/ethernet/cadence/macb.h
-index 2847278d9..6a5da7823 100644
+index 3552cd0a2..5d14f6519 100644
 --- a/drivers/net/ethernet/cadence/macb.h
 +++ b/drivers/net/ethernet/cadence/macb.h
 @@ -563,11 +563,21 @@
@@ -584,7 +584,7 @@ index 2847278d9..6a5da7823 100644
  /* struct macb_dma_desc - Hardware DMA descriptor
   * @addr: DMA address of data buffer
 diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
-index 67b16aca5..e5aaed41b 100644
+index 30d2dd614..f674e33d1 100644
 --- a/drivers/net/ethernet/cadence/macb_main.c
 +++ b/drivers/net/ethernet/cadence/macb_main.c
 @@ -29,6 +29,7 @@
@@ -841,7 +841,7 @@ index 67b16aca5..e5aaed41b 100644
  	return err;
  }
  
-@@ -5080,6 +5151,16 @@ static const struct macb_config versal_config = {
+@@ -5074,6 +5145,16 @@ static const struct macb_config versal_config = {
  	.usrio = &macb_default_usrio,
  };
  
@@ -858,7 +858,7 @@ index 67b16aca5..e5aaed41b 100644
  static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "cdns,at91sam9260-macb", .data = &at91sam9260_config },
  	{ .compatible = "cdns,macb" },
-@@ -5103,6 +5184,7 @@ static const struct of_device_id macb_dt_ids[] = {
+@@ -5097,6 +5178,7 @@ static const struct of_device_id macb_dt_ids[] = {
  	{ .compatible = "xlnx,zynqmp-gem", .data = &zynqmp_config},
  	{ .compatible = "xlnx,zynq-gem", .data = &zynq_config },
  	{ .compatible = "xlnx,versal-gem", .data = &versal_config},

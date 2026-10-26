@@ -1,5 +1,5 @@
 diff --git a/drivers/usb/host/Kconfig b/drivers/usb/host/Kconfig
-index d011d6c75..2687517b7 100644
+index 9d8626f36..8ebf7afa4 100644
 --- a/drivers/usb/host/Kconfig
 +++ b/drivers/usb/host/Kconfig
 @@ -53,6 +53,7 @@ config USB_XHCI_PCI_RENESAS
@@ -164,7 +164,7 @@ index 448656d68..930388ce5 100644
  }
  
 diff --git a/drivers/usb/host/xhci.c b/drivers/usb/host/xhci.c
-index a50e813dd..4fd64a8b7 100644
+index 3050bd851..02060a262 100644
 --- a/drivers/usb/host/xhci.c
 +++ b/drivers/usb/host/xhci.c
 @@ -191,7 +191,11 @@ int xhci_reset(struct xhci_hcd *xhci, u64 timeout_us)
@@ -195,10 +195,10 @@ index a50e813dd..4fd64a8b7 100644
  		return ret;
  
 diff --git a/drivers/usb/host/xhci.h b/drivers/usb/host/xhci.h
-index 1a3f2dfd5..2449bb44d 100644
+index 2e9a7fa98..dc92f065e 100644
 --- a/drivers/usb/host/xhci.h
 +++ b/drivers/usb/host/xhci.h
-@@ -1850,6 +1850,14 @@ void xhci_remove_secondary_interrupter(struct usb_hcd
+@@ -1847,6 +1847,14 @@ void xhci_remove_secondary_interrupter(struct usb_hcd
  
  /* xHCI host controller glue */
  typedef void (*xhci_get_quirks_t)(struct device *, struct xhci_hcd *);
